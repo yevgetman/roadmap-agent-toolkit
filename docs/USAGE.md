@@ -11,7 +11,7 @@ itself. Your project's runtimes are configured during setup.
 
 ## Installation
 
-### Option 1: Clone and run
+### Option 1: CLI installer
 
 ```bash
 git clone https://github.com/yevgetman/roadmap-agent-toolkit.git
@@ -19,18 +19,52 @@ cd roadmap-agent-toolkit
 ./install.sh --target /path/to/your-repo
 ```
 
-### Option 2: Run directly
+If `--target` is omitted, the installer prompts for the path.
+
+### Option 2: Non-interactive mode
+
+Pass a config file to skip all prompts:
 
 ```bash
-git clone https://github.com/yevgetman/roadmap-agent-toolkit.git
-roadmap-agent-toolkit/install.sh --target /path/to/your-repo
+./install.sh --config config.yml --target /path/to/your-repo
 ```
 
-If `--target` is omitted, the installer prompts for the path.
+See `examples/` for reference configs. The format matches what
+the installer saves to `.roadmap/config.yml` after a run, so you
+can re-run with the saved config to regenerate files after a
+toolkit update.
+
+Use `--force` to overwrite existing files without prompting:
+
+```bash
+./install.sh --config config.yml --target /path/to/your-repo --force
+```
+
+### Option 3: Claude Code slash command
+
+If you use Claude Code, run `/init-roadmap` inside any session.
+Claude reads the templates and walks you through setup
+conversationally. No bash needed. Additional slash commands:
+
+| Command | Purpose |
+|---|---|
+| `/init-roadmap` | Full setup (alternative to `install.sh`) |
+| `/roadmap-status` | Summarize backlog state across all tracks |
+| `/add-track` | Add a new track to an existing BACKLOG.yml |
+| `/add-item` | Create a spec file and add a backlog entry |
+
+### Flags
+
+| Flag | Purpose |
+|---|---|
+| `--target <path>` | Target repo path (prompted if omitted) |
+| `--config <file>` | Non-interactive: read config from YAML file |
+| `--force` | Overwrite existing files without prompting |
+| `--help` | Show usage and exit |
 
 ## Installer walkthrough
 
-The installer runs interactively in 10 phases:
+The installer runs interactively in 12 phases:
 
 ### Phase 1: Target repo
 
@@ -64,12 +98,23 @@ Staging branch [staging]:
 Backend platform:
   1) Heroku
   2) Fly.io
-  3) Custom
-  4) None (no auto-deploy)
-Choose [1-4]:
+  3) AWS ECS/Fargate
+  4) GCP Cloud Run
+  5) Railway
+  6) Render
+  7) Custom
+  8) None (no auto-deploy)
+Choose [1-8]:
 ```
 
-Platform-specific follow-ups (app names for staging + prod).
+Platform-specific follow-ups depend on the choice:
+- **Heroku** — staging + prod app names
+- **Fly.io** — staging + prod app names
+- **AWS ECS** — region, ECR repo, cluster names, subnet, security group
+- **GCP Cloud Run** — project ID, region, artifact registry repo
+- **Railway** — project ID, service names
+- **Render** — service IDs
+- **Custom** — deploy commands, secrets list
 
 ### Phase 5: Frontend platform
 
@@ -77,14 +122,28 @@ Platform-specific follow-ups (app names for staging + prod).
 Frontend platform:
   1) Cloudflare Pages
   2) Vercel
-  3) Custom
-  4) None
-Choose [1-4]:
+  3) Netlify
+  4) AWS S3 + CloudFront
+  5) FTP/SFTP
+  6) Custom
+  7) None
+Choose [1-7]:
 ```
 
 Follow-ups: frontend directory, project names, test/build commands.
+Platform-specific prompts for bucket names, distribution IDs,
+site IDs, hosts, etc.
 
 ### Phase 6: Test commands
+
+Auto-detected from project files when possible:
+
+| File found | Backend test default |
+|---|---|
+| `manage.py` | `python manage.py test --noinput` |
+| `Gemfile` | `bundle exec rails test` |
+| `go.mod` | `go test ./...` |
+| `Cargo.toml` | `cargo test` |
 
 ```
 Backend test command [python manage.py test --noinput]:
@@ -103,9 +162,13 @@ Choose [1-3]:
 
 ### Phase 8: Migration command
 
+Auto-detected similarly to test commands:
+
 ```
 Migration command [python manage.py migrate --noinput]:
 ```
+
+Leave empty if no migrations are needed.
 
 ### Phase 9: Track setup
 
@@ -130,6 +193,59 @@ Track 2:
 Include ad-hoc issue handling agent? [Y/n]:
 ```
 
+### Phase 11: Agent runtime
+
+Auto-detects available CLIs (`claude --version`, `codex --version`):
+
+```
+Agent runtime:
+  1) Claude Code (built-in scheduling)
+  2) OpenAI Codex (needs external scheduler)
+  3) Open Code (needs external scheduler)
+  4) Custom (provide invoke command)
+Choose [1-4]:
+```
+
+### Phase 12: Scheduler
+
+Only asked if the runtime is not Claude Code (which has built-in
+scheduling). Auto-selects based on OS:
+
+```
+Scheduler:
+  1) launchd (macOS)
+  2) crontab
+  3) GitHub Actions cron
+  4) Custom
+Choose [1-4]:
+```
+
+## Generated output
+
+The installer creates files in the target repo and saves the
+resolved config for re-runs:
+
+### Generated files
+
+- `WORKFLOWS.md` — branch model (copied verbatim)
+- `docs/INFRA.yml` — infrastructure mapping
+- `docs/ROADMAPS.md` — master index
+- `docs/roadmap/` — backlog, agent prompt, design doc
+- `docs/roadmap-adhoc/` — ad-hoc agent (if enabled)
+- `.github/workflows/` — CI, deploy, and migration workflows
+- `.roadmap/config.yml` — saved config
+- `.roadmap/setup-agents.sh` — agent install/uninstall/status
+- `.roadmap/agents/` — tick scripts (for non-Claude runtimes)
+- `.roadmap/.gitignore` — excludes logs and generated plists
+
+### Handling existing files
+
+When a target file already exists:
+- In interactive mode: prompted to skip, overwrite, overwrite all,
+  or quit
+- With `--force`: always overwrites without prompting
+- Files that haven't changed are not rewritten
+
 ## Post-install setup
 
 After the installer runs:
@@ -151,8 +267,14 @@ Required secrets depend on your platform choices:
 | Cloudflare Pages | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
 | Vercel | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` |
 | Fly.io | `FLY_API_TOKEN` |
+| AWS ECS | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
+| GCP Cloud Run | `GCP_SA_KEY` |
+| Netlify | `NETLIFY_AUTH_TOKEN` |
+| Railway | `RAILWAY_TOKEN` |
+| Render | `RENDER_API_KEY` |
+| FTP/SFTP | `FTP_USERNAME`, `FTP_PASSWORD` |
 
-Add via: Settings → Secrets and variables → Actions.
+Add via: Settings > Secrets and variables > Actions.
 
 ### 3. Create the staging branch
 
@@ -168,7 +290,7 @@ git push -u origin staging
 ### 4. Enable branch auto-delete
 
 If the installer didn't set it, enable manually:
-Settings → General → "Automatically delete head branches" ✓
+Settings > General > "Automatically delete head branches"
 
 ### 5. Add your first backlog item
 
@@ -177,16 +299,19 @@ Settings → General → "Automatically delete head branches" ✓
    `docs/roadmap/BACKLOG.yml` with `status: ready`
 3. Commit and push
 
+Or use `/add-item` in Claude Code.
+
 ### 6. Schedule your agents
 
-Options:
+The installer prints scheduling instructions per track. Options:
 
-- **Claude Code routines**: `/schedule create` with the
-  AGENT_PROMPT content and `TRACK` set
-- **GitHub Actions cron**: a workflow that invokes your LLM CLI
-- **Custom cron**: any scheduler with repo + LLM access
+- **Claude Code**: run `/schedule create` with the AGENT_PROMPT
+  content and `TRACK` set to the track name
+- **launchd/crontab**: run `.roadmap/setup-agents.sh install`
+- **GitHub Actions cron**: the workflow file is already generated
+- **Custom**: follow the instructions in the summary
 
-Recommended: every 6 hours, offset 1 hour per track.
+Recommended cadence: every 6 hours, offset 1 hour per track.
 
 ### 7. Verify end-to-end
 
@@ -205,8 +330,14 @@ Then merge the PR and confirm:
 ## Updating
 
 When the toolkit is updated (new template content, new platform
-variants), re-run the installer. It warns before overwriting
-existing files and lets you skip or replace each one.
+variants), re-run the installer with the saved config:
+
+```bash
+./install.sh --config /path/to/your-repo/.roadmap/config.yml --target /path/to/your-repo
+```
+
+The installer warns before overwriting existing files unless
+`--force` is passed.
 
 ## Uninstalling
 

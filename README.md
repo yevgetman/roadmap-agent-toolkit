@@ -9,16 +9,29 @@ implement a backlog of work items against a staging environment.
 
 ## Quick start
 
+### Option A: CLI installer
+
 ```bash
 git clone https://github.com/yevgetman/roadmap-agent-toolkit.git
 cd roadmap-agent-toolkit
 ./install.sh --target /path/to/your-repo
 ```
 
-The installer prompts for your stack (Heroku/Fly, Cloudflare/Vercel,
-MySQL/Postgres), how many roadmap tracks you want, and generates
-all files in the target repo. No dependencies beyond `git` and
-standard POSIX tools.
+The installer prompts for your stack, how many roadmap tracks you
+want, which agent runtime to use, and generates all files in the
+target repo. No dependencies beyond `git` and standard POSIX tools.
+
+For non-interactive use, pass a config file:
+
+```bash
+./install.sh --config examples/django-heroku-cloudflare/config.yml --target /path/to/your-repo
+```
+
+### Option B: Claude Code slash command
+
+If you have Claude Code, run `/init-roadmap` inside any session.
+Claude reads the templates and walks you through setup
+conversationally — no bash needed.
 
 ## What it does
 
@@ -51,23 +64,29 @@ your-repo/
 │       ├── STATE.yml
 │       ├── AGENT_PROMPT.md
 │       └── README.md
-└── .github/workflows/
-    ├── tests.yml                       # Backend CI
-    ├── frontend-tests.yml              # Frontend CI
-    ├── deploy-prod-backend.yml         # CI-gated prod deploy
-    ├── deploy-prod-frontend.yml        # CI-gated prod deploy
-    ├── deploy-staging-frontend.yml     # Staging frontend deploy
-    └── staging-migrate.yml             # Auto-run migrations
+├── .github/workflows/
+│   ├── tests.yml                       # Backend CI
+│   ├── frontend-tests.yml              # Frontend CI
+│   ├── deploy-prod-backend.yml         # CI-gated prod deploy
+│   ├── deploy-prod-frontend.yml        # CI-gated prod deploy
+│   ├── deploy-staging-frontend.yml     # Staging frontend deploy
+│   └── staging-migrate.yml             # Auto-run migrations
+└── .roadmap/                           # Agent infrastructure
+    ├── config.yml                      # Saved config (for re-runs)
+    ├── setup-agents.sh                 # Install/uninstall/status
+    ├── agents/                         # Tick scripts (per runtime)
+    │   └── tick-<track>.sh
+    └── logs/                           # Agent tick logs
 ```
 
 ## Documentation
 
 - **[Usage guide](docs/USAGE.md)** — installation walkthrough,
-  configuration options, post-install setup
+  `--config`/`--force` flags, post-install setup
 - **[Architecture](docs/ARCHITECTURE.md)** — the workflow pattern,
   status lifecycle, CI pipeline, agent contract, scheduling
 - **[Developer reference](docs/DEVELOPER.md)** — file map,
-  template interpolation, adding platform variants, contributing
+  template variables, profiles, adding platform variants
 - **[LLM.md](LLM.md)** — codebase summary for LLM context
   scanning (file map, key abstractions, conventions)
 

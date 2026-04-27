@@ -1,13 +1,13 @@
 # AGENTS.md — Rules of engagement
 
-Cross-tool agent entry point (Claude Code, Cursor, Aider, etc.).
+Cross-tool agent entry point (Claude Code, Cursor, Codex, etc.).
 Mirrors `CLAUDE.md` — same rules, vendor-neutral framing.
 
 ## What this repo is
 
 An interactive CLI installer that scaffolds automated agentic
-roadmap workflows into any git repo. Templates + installer script.
-No application code, no runtime dependencies.
+roadmap workflows into any git repo. Templates + deploy profiles +
+installer script. No application code, no runtime dependencies.
 
 ## Read order
 
@@ -32,11 +32,31 @@ django-munky wins — update this repo to match.
 
 | File | What it is | When to read |
 |---|---|---|
-| `install.sh` | The installer | When changing the CLI flow |
+| `install.sh` | The installer (~1700 lines, pure bash) | When changing the CLI flow |
+| `defaults.yml` | Config schema + rational defaults | When changing prompts, adding options |
+| `profiles/backend/*.yml` | Backend deploy profiles (7 platforms) | When changing deploy behavior |
+| `profiles/frontend/*.yml` | Frontend deploy profiles (6 platforms) | When changing deploy behavior |
+| `profiles/agents/*.yml` | Agent runtime profiles (4 runtimes) | When changing agent wiring |
+| `profiles/schedulers/*.yml` | Scheduler profiles (4 types) | When changing scheduling |
 | `templates/docs/roadmap/AGENT_PROMPT.md.tmpl` | Agent contract | When changing agent behavior |
 | `templates/docs/roadmap/BACKLOG.yml.tmpl` | Backlog schema | When changing the data model |
 | `templates/WORKFLOWS.md` | Branch model | When changing branch/merge rules |
 | `templates/.github/workflows/` | CI/deploy templates | When changing pipeline behavior |
+| `templates/.roadmap/` | Tick scripts + scheduler templates | When changing agent infrastructure |
+| `.claude/commands/` | Claude Code slash commands | When changing the conversational UX |
+| `tests/` | Test suite (bash) | When verifying changes |
+| `examples/` | Example configs (4 stacks) | When testing interpolation |
+
+## Slash commands (Claude Code)
+
+Available when working inside this repo with Claude Code:
+
+| Command | Purpose |
+|---|---|
+| `/init-roadmap` | Scaffold the roadmap workflow conversationally (alternative to `install.sh`) |
+| `/roadmap-status` | Summarize current backlog state across all tracks |
+| `/add-track` | Add a new track to an existing BACKLOG.yml |
+| `/add-item` | Create a spec file and add a backlog entry |
 
 ## Rules
 
@@ -54,16 +74,31 @@ django-munky wins — update this repo to match.
    complete workflow file.
 5. **Don't hardcode repo-specific values.** Everything concrete
    must be a `${__VARIABLE}` placeholder.
-6. **Test against the django-munky example.** The example config
-   should always reflect what the installer produces for
-   django-munky's setup.
+6. **Test against examples.** The `examples/` configs should
+   always reflect what the installer produces for their
+   respective stacks.
 
 ## Testing changes
 
-No automated test suite yet. To verify:
+Run the test suite:
 
-1. Run `./install.sh --target /tmp/test-repo` against a fresh
-   git repo
+```bash
+./tests/run.sh
+```
+
+The suite includes 6 tests:
+
+| Test | What it checks |
+|---|---|
+| `test_syntax` | `install.sh` has valid bash syntax |
+| `test_help_flag` | `--help` exits 0, mentions `--target`, `--config`, `--force` |
+| `test_bad_target` | Graceful failure on non-existent target |
+| `test_no_leftover_vars` | No malformed `${__` placeholders in templates |
+| `test_templates_valid_yaml` | All workflow templates have `name:`, `on:`, `jobs:` |
+| `test_all_profiles_have_workflows` | Every profile has a matching workflow template |
+
+For manual verification:
+
+1. Run `./install.sh --config examples/django-heroku-cloudflare/config.yml --target /tmp/test-repo --force` against a fresh git repo
 2. Review generated files for correctness
 3. Compare against django-munky reference implementation
-4. Verify edge cases (existing files, missing `gh`, Ctrl+C)

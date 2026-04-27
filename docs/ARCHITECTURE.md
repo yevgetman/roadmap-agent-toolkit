@@ -239,11 +239,17 @@ hours, offset 1 hour per track so no two fire simultaneously.
 | ai-agent | `0 2/6 * * *` | 02, 08, 14, 20 |
 | adhoc-agent | `0 3/6 * * *` | 03, 09, 15, 21 |
 
-Runtime options (provider-agnostic):
-- Claude Code routines
+Agent runtimes (provider-agnostic):
+- Claude Code (built-in scheduling via routines)
+- OpenAI Codex (needs external scheduler)
+- Open Code (needs external scheduler)
+- Custom CLI (needs external scheduler)
+
+Scheduler options (for non-Claude runtimes):
+- launchd (macOS LaunchAgent)
+- crontab (Linux/macOS)
 - GitHub Actions cron
-- Custom cron + CLI
-- Any task scheduler with repo access + LLM API
+- Custom
 
 Empty backlog: agent exits cleanly. Cron keeps firing — picks up
 new items when added. Only cancel manually when a track is retired.
