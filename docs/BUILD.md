@@ -287,30 +287,71 @@ Run in CI via a simple GH Actions workflow.
 
 ---
 
+---
+
+## 11. Claude Code slash command skill
+
+**Status:** not started
+
+**Goal:** Let users run `/init-roadmap` inside any Claude Code
+session to scaffold the roadmap workflow conversationally — no
+`install.sh` needed.
+
+**What to build:**
+- [ ] `.claude/commands/init-roadmap.md` — slash command prompt
+      that tells Claude Code to:
+  - Read `defaults.yml` for the config schema
+  - Read the deploy profiles for platform options
+  - Ask the user config questions conversationally
+  - Generate all files directly (read templates, interpolate,
+    write to the repo)
+  - Create GH labels, staging branch, auto-delete setting
+  - Print scheduling instructions
+- [ ] The prompt should reference the templates directory so
+      Claude Code reads and interpolates them itself (no bash)
+- [ ] Include a "dry run" option that previews what would be
+      generated without writing files
+- [ ] Support partial runs ("just set up the backend deploy"
+      without re-scaffolding everything)
+
+**Design notes:**
+The slash command replaces `install.sh`'s interactive flow with
+Claude Code's conversational UX. The user says `/init-roadmap`
+and Claude asks "What backend platform are you using?" etc.
+Claude reads the templates, interpolates the values, and writes
+the files using its built-in tools.
+
+The key advantage: Claude can inspect the repo context (existing
+files, package.json, Dockerfile, etc.) to make smarter auto-detect
+decisions than bash grep. It can also explain each choice as it
+goes.
+
+The slash command lives in this repo. When the user clones the
+toolkit and opens it in Claude Code, `/init-roadmap` is available.
+Alternatively, the command file could be copied into the target
+repo's `.claude/commands/` during install.
+
+**Stretch goals:**
+- [ ] A `/roadmap-status` command that reads BACKLOG.yml and
+      summarizes current state across all tracks
+- [ ] A `/add-track` command that adds a new track to an
+      existing BACKLOG.yml
+- [ ] A `/add-item` command that creates a spec file and adds
+      a backlog entry
+
+---
+
 ## Build order
 
 Recommended sequence (each step is independently useful):
 
-1. **§3 — Workflow templates** — fill the gaps so every profile
-   has a matching workflow template. Pure file creation, no
-   installer changes.
-
-2. **§4 — Agent wiring** — generate tick scripts and scheduler
-   files. The most user-visible missing piece.
-
-3. **§1 + §2 — Schema-driven installer** — the big refactor.
-   Replace hardcoded prompts with defaults.yml-driven flow.
-   Load deploy profiles. This touches most of install.sh.
-
-4. **§6 — Save config** — small addition after §1+§2.
-
-5. **§5 — Non-interactive mode** — reads the saved config.
-   Depends on §6's format.
-
-6. **§7 — Idempotent re-runs** — polish for re-running after
-   toolkit updates.
-
-7. **§8 — Test suite** — validates everything above.
-
-8. **§9 + §10 — Examples + docs** — update to match the new
-   reality.
+1. **§3 — Workflow templates** — COMPLETE
+2. **§4 — Agent wiring** — COMPLETE
+3. **§1 + §2 — Schema-driven installer** — in progress
+4. **§6 — Save config** — after §1+§2
+5. **§5 — Non-interactive mode** — depends on §6
+6. **§7 — Idempotent re-runs** — polish
+7. **§8 — Test suite** — validates everything above
+8. **§9 + §10 — Examples + docs** — update to match
+9. **§11 — Claude Code slash command** — after the installer
+   is stable, port the flow to a conversational skill
