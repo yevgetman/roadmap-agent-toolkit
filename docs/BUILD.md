@@ -233,7 +233,7 @@ adhoc:
 
 ## 8. Test suite
 
-**Status:** not started
+**Status:** COMPLETE
 
 **What to build:**
 - [ ] `tests/` directory with bash test scripts
@@ -351,7 +351,7 @@ Recommended sequence (each step is independently useful):
 4. **§5 — Non-interactive mode** — COMPLETE
 5. **§6 — Save config** — COMPLETE
 6. **§7 — Idempotent re-runs** — COMPLETE
-7. **§8 — Test suite** — validates everything above
+7. **§8 — Test suite** — COMPLETE
 8. **§9 + §10 — Examples + docs** — update to match
 9. **§11 — Claude Code slash command** — after the installer
    is stable, port the flow to a conversational skill
