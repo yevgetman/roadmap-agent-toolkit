@@ -52,7 +52,7 @@ your-repo/
 
 **Human merge gate.** After an item passes CI on staging, the agent opens a PR against the production branch. A human reviews and merges. The agent detects the merge on a subsequent tick and marks the item done.
 
-**Feature branches are ephemeral.** Each item gets a short-lived branch off the production branch, merged into staging via `--no-ff`, then proposed to production via PR. Deleted after the production merge lands.
+**Feature branches are ephemeral.** Each item gets a short-lived branch off the production branch, merged into staging via `--no-ff`, then proposed to production via PR. Automatically deleted when the PR merges (enable "Automatically delete head branches" in repo settings).
 
 ### Branch model
 

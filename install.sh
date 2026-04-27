@@ -526,6 +526,15 @@ if command -v gh &>/dev/null; then
                 warn "  Could not push (may already exist on remote)"
         fi
     fi
+
+    if confirm "Enable auto-delete branches on PR merge?"; then
+        if gh api "repos/$REPO_OWNER/$REPO_NAME" --method PATCH \
+            -f delete_branch_on_merge=true --silent 2>/dev/null; then
+            success "  Auto-delete head branches: enabled"
+        else
+            warn "  Could not update repo setting (may need admin access)"
+        fi
+    fi
 else
     warn "gh CLI not found — skipping label + branch creation."
     info "Install: https://cli.github.com"

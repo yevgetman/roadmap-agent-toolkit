@@ -79,11 +79,11 @@ All other branches are **short-lived** and always branched off `main`:
    "Deployment" below and `INFRA.yml`).
 7. **Confirm deploy success.** Wait for the platform's "green deploy"
    signal before declaring the work done.
-8. **Delete the branch — locally AND on the remote.** Any open PR
-   auto-closes when its head ref is deleted from the remote.
+8. **Delete the branch.** Enable "Automatically delete head branches"
+   in the repo's GitHub settings so the remote branch is cleaned up
+   when the PR merges. Delete the local branch manually:
    ```bash
    git branch -d <branch>
-   git push origin --delete <branch>
    ```
 
 ## Issue tracking
