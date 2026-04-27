@@ -1,0 +1,52 @@
+name: Deploy — Production Backend
+
+# Auto-deploy backend to Render after CI passes on production.
+#
+# Required GitHub repo secrets:
+#   RENDER_API_KEY  — Render API key
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__PROD_BRANCH}]
+
+concurrency:
+  group: deploy-prod-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Render (${__BACKEND_APP_PROD})
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+
+    steps:
+      - name: Trigger deploy
+        run: |
+          curl -s -X POST "https://api.render.com/v1/services/${__RENDER_SERVICE_ID_PROD}/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json"
+
+      - name: Wait for deploy to complete
+        run: |
+          for i in {1..30}; do
+            STATUS=$(curl -s "https://api.render.com/v1/services/${__RENDER_SERVICE_ID_PROD}" \
+              -H "Authorization: Bearer $RENDER_API_KEY" | \
+              python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null)
+            echo "Status: $STATUS (attempt $i)"
+            [ "$STATUS" = "live" ] && exit 0
+            sleep 10
+          done
+          echo "::warning::Deploy status check timed out"
+
+      - name: Run migrations
+        if: ${{ '${__MIGRATION_CMD}' != '' }}
+        run: |
+          curl -s -X POST "https://api.render.com/v1/services/${__RENDER_SERVICE_ID_PROD}/jobs" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"startCommand":"${__MIGRATION_CMD}"}'

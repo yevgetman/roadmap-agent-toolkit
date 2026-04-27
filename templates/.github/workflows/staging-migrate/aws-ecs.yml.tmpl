@@ -1,0 +1,42 @@
+name: Staging Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why this migration run is needed'
+        required: false
+        default: 'ad-hoc staging migration'
+
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__STAGING_BRANCH}]
+
+concurrency:
+  group: staging-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: ECS run-task migrate (${__BACKEND_APP_STAGING})
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${__AWS_REGION}
+
+      - name: Apply migrations
+        run: |
+          aws ecs run-task \
+            --cluster ${__ECS_CLUSTER_STAGING} \
+            --task-definition ${__BACKEND_APP_STAGING}-migrate \
+            --launch-type FARGATE \
+            --region ${__AWS_REGION} \
+            --network-configuration "awsvpcConfiguration={subnets=[${__ECS_SUBNET}],securityGroups=[${__ECS_SG}]}"

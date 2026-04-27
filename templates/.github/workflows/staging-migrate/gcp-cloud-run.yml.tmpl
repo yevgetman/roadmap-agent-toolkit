@@ -1,0 +1,39 @@
+name: Staging Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why this migration run is needed'
+        required: false
+        default: 'ad-hoc staging migration'
+
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__STAGING_BRANCH}]
+
+concurrency:
+  group: staging-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Cloud Run job migrate (${__BACKEND_APP_STAGING})
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Apply migrations
+        run: |
+          gcloud run jobs execute ${__BACKEND_APP_STAGING}-migrate \
+            --region ${__GCP_REGION} \
+            --project ${__GCP_PROJECT_ID} \
+            --wait --quiet

@@ -1,0 +1,63 @@
+name: Deploy — Production Backend
+
+# Auto-deploy backend to GCP Cloud Run after CI passes on production.
+#
+# Required GitHub repo secrets:
+#   GCP_SA_KEY  — service account key JSON (Cloud Run Admin + Artifact Registry Writer)
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__PROD_BRANCH}]
+
+concurrency:
+  group: deploy-prod-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Cloud Run (${__BACKEND_APP_PROD})
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${__GCP_REGION}-docker.pkg.dev --quiet
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t ${__ARTIFACT_REGISTRY_REPO}:prod-${GITHUB_SHA::7} .
+          docker push ${__ARTIFACT_REGISTRY_REPO}:prod-${GITHUB_SHA::7}
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${__BACKEND_APP_PROD} \
+            --image ${__ARTIFACT_REGISTRY_REPO}:prod-${GITHUB_SHA::7} \
+            --region ${__GCP_REGION} \
+            --project ${__GCP_PROJECT_ID} \
+            --quiet
+
+      - name: Run migrations
+        if: ${{ '${__MIGRATION_CMD}' != '' }}
+        run: |
+          gcloud run jobs execute ${__BACKEND_APP_PROD}-migrate \
+            --region ${__GCP_REGION} \
+            --project ${__GCP_PROJECT_ID} \
+            --wait --quiet
+
+      - name: Verify service health
+        run: |
+          gcloud run services describe ${__BACKEND_APP_PROD} \
+            --region ${__GCP_REGION} \
+            --project ${__GCP_PROJECT_ID} \
+            --format "value(status.conditions[0].status, status.conditions[0].type)"

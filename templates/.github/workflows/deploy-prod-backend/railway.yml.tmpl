@@ -1,0 +1,41 @@
+name: Deploy — Production Backend
+
+# Auto-deploy backend to Railway after CI passes on production.
+#
+# Required GitHub repo secrets:
+#   RAILWAY_TOKEN  — Railway project token
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__PROD_BRANCH}]
+
+concurrency:
+  group: deploy-prod-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Railway (${__BACKEND_APP_PROD})
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --service ${__BACKEND_APP_PROD} --environment production
+
+      - name: Run migrations
+        if: ${{ '${__MIGRATION_CMD}' != '' }}
+        run: railway run --service ${__BACKEND_APP_PROD} --environment production ${__MIGRATION_CMD}
+
+      - name: Verify service health
+        run: railway status --service ${__BACKEND_APP_PROD} --environment production

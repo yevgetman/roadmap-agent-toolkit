@@ -75,38 +75,34 @@ YAML-parsing problem — same approach as §1.
 
 ## 3. Workflow templates for all platform variants
 
-**Status:** partially done
+**Status:** COMPLETE
 
 **What exists:**
 - `templates/.github/workflows/deploy-prod-backend/` has:
-  heroku, fly, custom
+  heroku, fly, aws-ecs, gcp-cloud-run, railway, render, custom
 - `templates/.github/workflows/deploy-prod-frontend/` has:
-  cloudflare-pages, vercel, custom
+  cloudflare-pages, vercel, netlify, aws-s3-cloudfront, ftp, custom
 - `templates/.github/workflows/deploy-staging-frontend/` has:
-  cloudflare-pages, vercel, custom
+  cloudflare-pages, vercel, netlify, aws-s3-cloudfront, ftp, custom
 - `templates/.github/workflows/staging-migrate/` has:
-  heroku, custom
+  heroku, fly, aws-ecs, gcp-cloud-run, railway, render, custom
 
-**What to build:**
-- [ ] `deploy-prod-backend/aws-ecs.yml.tmpl`
-- [ ] `deploy-prod-backend/gcp-cloud-run.yml.tmpl`
-- [ ] `deploy-prod-backend/railway.yml.tmpl`
-- [ ] `deploy-prod-backend/render.yml.tmpl`
-- [ ] `deploy-prod-frontend/netlify.yml.tmpl`
-- [ ] `deploy-prod-frontend/aws-s3-cloudfront.yml.tmpl`
-- [ ] `deploy-prod-frontend/ftp.yml.tmpl`
-- [ ] `deploy-staging-frontend/netlify.yml.tmpl`
-- [ ] `deploy-staging-frontend/aws-s3-cloudfront.yml.tmpl`
-- [ ] `deploy-staging-frontend/ftp.yml.tmpl`
-- [ ] `staging-migrate/fly.yml.tmpl`
-- [ ] `staging-migrate/aws-ecs.yml.tmpl`
-- [ ] `staging-migrate/gcp-cloud-run.yml.tmpl`
-- [ ] `staging-migrate/railway.yml.tmpl`
-- [ ] `staging-migrate/render.yml.tmpl`
-
-Each workflow template should be a complete, working GH Actions
-file using `${__VARIABLE}` placeholders. Use the deploy commands
-from the corresponding profile as the run steps.
+**Completed:**
+- [x] `deploy-prod-backend/aws-ecs.yml.tmpl`
+- [x] `deploy-prod-backend/gcp-cloud-run.yml.tmpl`
+- [x] `deploy-prod-backend/railway.yml.tmpl`
+- [x] `deploy-prod-backend/render.yml.tmpl`
+- [x] `deploy-prod-frontend/netlify.yml.tmpl`
+- [x] `deploy-prod-frontend/aws-s3-cloudfront.yml.tmpl`
+- [x] `deploy-prod-frontend/ftp.yml.tmpl`
+- [x] `deploy-staging-frontend/netlify.yml.tmpl`
+- [x] `deploy-staging-frontend/aws-s3-cloudfront.yml.tmpl`
+- [x] `deploy-staging-frontend/ftp.yml.tmpl`
+- [x] `staging-migrate/fly.yml.tmpl`
+- [x] `staging-migrate/aws-ecs.yml.tmpl`
+- [x] `staging-migrate/gcp-cloud-run.yml.tmpl`
+- [x] `staging-migrate/railway.yml.tmpl`
+- [x] `staging-migrate/render.yml.tmpl`
 
 ---
 

@@ -1,0 +1,63 @@
+name: Deploy — Production Frontend
+
+# Auto-deploy frontend to AWS S3 + CloudFront after CI passes.
+#
+# Required GitHub repo secrets:
+#   AWS_ACCESS_KEY_ID      — IAM key with S3 write + CloudFront invalidation
+#   AWS_SECRET_ACCESS_KEY  — IAM secret key
+
+on:
+  workflow_run:
+    workflows: ["Frontend Tests"]
+    types: [completed]
+    branches: [${__PROD_BRANCH}]
+
+concurrency:
+  group: deploy-prod-frontend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build + deploy to S3 (production)
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ${__FRONTEND_DIR}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${__NODE_VERSION_FILE}
+          cache: npm
+          cache-dependency-path: ${__FRONTEND_DIR}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests
+        run: ${__FRONTEND_TEST_CMD}
+
+      - name: Build
+        run: ${__FRONTEND_BUILD_CMD}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${__AWS_REGION}
+
+      - name: Sync to S3
+        run: aws s3 sync dist s3://${__S3_BUCKET_PROD} --delete --region ${__AWS_REGION}
+
+      - name: Invalidate CloudFront cache
+        if: ${{ '${__CLOUDFRONT_DIST_PROD}' != '' }}
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${__CLOUDFRONT_DIST_PROD} \
+            --paths "/*"

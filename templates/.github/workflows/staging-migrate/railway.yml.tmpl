@@ -1,0 +1,35 @@
+name: Staging Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why this migration run is needed'
+        required: false
+        default: 'ad-hoc staging migration'
+
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__STAGING_BRANCH}]
+
+concurrency:
+  group: staging-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: railway run migrate (${__BACKEND_APP_STAGING})
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    steps:
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Apply migrations
+        run: |
+          railway run --service ${__BACKEND_APP_STAGING} --environment staging ${__MIGRATION_CMD}

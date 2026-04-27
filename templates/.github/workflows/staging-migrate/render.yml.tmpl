@@ -1,0 +1,41 @@
+name: Staging Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why this migration run is needed'
+        required: false
+        default: 'ad-hoc staging migration'
+
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__STAGING_BRANCH}]
+
+concurrency:
+  group: staging-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Render API migrate (${__BACKEND_APP_STAGING})
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+
+    steps:
+      - name: Apply migrations
+        run: |
+          curl -s -X POST \
+            "https://api.render.com/v1/services/${__RENDER_SERVICE_ID_STAGING}/jobs" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"startCommand":"${__MIGRATION_CMD}"}'
+
+      - name: Wait for job to complete
+        run: |
+          sleep 30
+          echo "Migration job triggered — check Render dashboard for status"

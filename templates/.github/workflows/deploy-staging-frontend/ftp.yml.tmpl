@@ -1,0 +1,49 @@
+name: Frontend Deploy — Staging
+
+on:
+  push:
+    branches: [${__STAGING_BRANCH}]
+    paths:
+      - '${__FRONTEND_DIR}/**'
+      - '.github/workflows/deploy-staging-frontend.yml'
+
+concurrency:
+  group: frontend-deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Test + build + deploy via FTP (staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ${__FRONTEND_DIR}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${__NODE_VERSION_FILE}
+          cache: npm
+          cache-dependency-path: ${__FRONTEND_DIR}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests
+        run: ${__FRONTEND_TEST_CMD}
+
+      - name: Build
+        run: ${__FRONTEND_BUILD_CMD}
+
+      - name: Install lftp
+        run: sudo apt-get install -y lftp
+
+      - name: Deploy via FTP
+        run: |
+          lftp -e "mirror --reverse --delete --verbose dist ${__FTP_REMOTE_PATH_STAGING}; bye" \
+            -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} \
+            ${__FTP_PROTOCOL}://${__FTP_HOST_STAGING}
