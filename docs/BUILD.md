@@ -12,7 +12,7 @@ items as they're completed.
 
 ## 1. Installer reads `defaults.yml` for config schema
 
-**Status:** not started
+**Status:** COMPLETE
 
 **What exists:**
 - `defaults.yml` defines every configurable option with type,
@@ -45,7 +45,7 @@ positional parsing works.
 
 ## 2. Installer loads deploy profiles
 
-**Status:** not started
+**Status:** COMPLETE
 
 **What exists:**
 - `profiles/backend/*.yml` — 7 backend deploy profiles
@@ -139,7 +139,7 @@ YAML-parsing problem — same approach as §1.
 
 ## 5. Non-interactive mode (`--config` flag)
 
-**Status:** not started
+**Status:** COMPLETE
 
 **What to build:**
 - [ ] Accept `--config <file.yml>` flag
@@ -203,7 +203,7 @@ adhoc:
 
 ## 6. Save config on completion
 
-**Status:** not started
+**Status:** COMPLETE
 
 **What to build:**
 - [ ] After generating files, write the user's resolved config
@@ -347,10 +347,10 @@ Recommended sequence (each step is independently useful):
 
 1. **§3 — Workflow templates** — COMPLETE
 2. **§4 — Agent wiring** — COMPLETE
-3. **§1 + §2 — Schema-driven installer** — in progress
-4. **§6 — Save config** — after §1+§2
-5. **§5 — Non-interactive mode** — depends on §6
-6. **§7 — Idempotent re-runs** — polish
+3. **§1 + §2 — Schema-driven installer** — COMPLETE
+4. **§5 — Non-interactive mode** — COMPLETE
+5. **§6 — Save config** — COMPLETE
+6. **§7 — Idempotent re-runs** — next
 7. **§8 — Test suite** — validates everything above
 8. **§9 + §10 — Examples + docs** — update to match
 9. **§11 — Claude Code slash command** — after the installer
