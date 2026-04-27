@@ -1,0 +1,94 @@
+# Google Cloud Run backend deploy profile
+#
+# Deploy method: build Docker image, push to Artifact Registry, deploy to Cloud Run
+# Requires: Dockerfile, Artifact Registry repo, Cloud Run service
+
+name: Google Cloud Run
+slug: gcp-cloud-run
+
+prompts:
+  - key: gcp_project_id
+    prompt: "GCP project ID"
+    default: null
+    required: true
+  - key: gcp_region
+    prompt: "GCP region"
+    default: "us-central1"
+  - key: artifact_registry_repo
+    prompt: "Artifact Registry repository (e.g. us-central1-docker.pkg.dev/my-project/my-repo)"
+    default: "${gcp_region}-docker.pkg.dev/${gcp_project_id}/${repo_name}"
+  - key: service_name_staging
+    prompt: "Cloud Run service name (staging)"
+    default: "${repo_name}-staging"
+  - key: service_name_prod
+    prompt: "Cloud Run service name (production)"
+    default: "${repo_name}-prod"
+
+deploy:
+  staging:
+    command: |
+      gcloud auth configure-docker ${gcp_region}-docker.pkg.dev --quiet
+      docker build -t ${artifact_registry_repo}:staging-${GITHUB_SHA::7} .
+      docker push ${artifact_registry_repo}:staging-${GITHUB_SHA::7}
+      gcloud run deploy ${service_name_staging} \
+        --image ${artifact_registry_repo}:staging-${GITHUB_SHA::7} \
+        --region ${gcp_region} \
+        --project ${gcp_project_id} \
+        --quiet
+  production:
+    command: |
+      gcloud auth configure-docker ${gcp_region}-docker.pkg.dev --quiet
+      docker build -t ${artifact_registry_repo}:prod-${GITHUB_SHA::7} .
+      docker push ${artifact_registry_repo}:prod-${GITHUB_SHA::7}
+      gcloud run deploy ${service_name_prod} \
+        --image ${artifact_registry_repo}:prod-${GITHUB_SHA::7} \
+        --region ${gcp_region} \
+        --project ${gcp_project_id} \
+        --quiet
+    full_clone: false
+
+migration:
+  staging:
+    command: |
+      gcloud run jobs execute ${service_name_staging}-migrate \
+        --region ${gcp_region} \
+        --project ${gcp_project_id} \
+        --wait --quiet
+    notes: "Requires a Cloud Run job named <service>-migrate with the migration command as its entrypoint"
+  production:
+    command: |
+      gcloud run jobs execute ${service_name_prod}-migrate \
+        --region ${gcp_region} \
+        --project ${gcp_project_id} \
+        --wait --quiet
+
+health_check:
+  staging:
+    command: |
+      gcloud run services describe ${service_name_staging} \
+        --region ${gcp_region} \
+        --project ${gcp_project_id} \
+        --format "value(status.conditions[0].status, status.conditions[0].type)"
+  production:
+    command: |
+      gcloud run services describe ${service_name_prod} \
+        --region ${gcp_region} \
+        --project ${gcp_project_id} \
+        --format "value(status.conditions[0].status, status.conditions[0].type)"
+
+secrets:
+  - name: GCP_SA_KEY
+    description: "Service account key JSON with Cloud Run Admin + Artifact Registry Writer roles"
+    how_to_get: "GCP Console → IAM → Service Accounts → Create key → JSON"
+    used_in: [deploy-prod-backend, staging-migrate]
+    setup_step: |
+      In the GH Actions workflow, authenticate with:
+        - uses: google-github-actions/auth@v2
+          with:
+            credentials_json: ${{ secrets.GCP_SA_KEY }}
+        - uses: google-github-actions/setup-gcloud@v2
+
+staging_agent_fallbacks:
+  deploy: "gcloud run deploy ${service_name_staging} --image ${artifact_registry_repo}:latest --region ${gcp_region} --project ${gcp_project_id}"
+  migrate: "gcloud run jobs execute ${service_name_staging}-migrate --region ${gcp_region} --project ${gcp_project_id} --wait"
+  env_var: "gcloud run services update ${service_name_staging} --set-env-vars <KEY>=<VALUE> --region ${gcp_region} --project ${gcp_project_id}"

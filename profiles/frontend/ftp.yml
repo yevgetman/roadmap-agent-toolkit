@@ -1,0 +1,58 @@
+# FTP/SFTP frontend deploy profile
+#
+# Deploy method: upload build output to a remote server via FTP/SFTP
+# Common for shared hosting, cPanel, traditional web hosts
+
+name: FTP / SFTP
+slug: ftp
+
+prompts:
+  - key: protocol
+    prompt: "Protocol"
+    type: choice
+    options: [sftp, ftp, ftps]
+    default: "sftp"
+  - key: host_staging
+    prompt: "Staging server hostname"
+    default: null
+    required: true
+  - key: host_prod
+    prompt: "Production server hostname"
+    default: null
+    required: true
+  - key: remote_path_staging
+    prompt: "Staging remote path (e.g. /var/www/staging/)"
+    default: "/var/www/staging/"
+  - key: remote_path_prod
+    prompt: "Production remote path (e.g. /var/www/html/)"
+    default: "/var/www/html/"
+  - key: username
+    prompt: "FTP/SFTP username (same for both envs, or use secrets)"
+    default: null
+
+deploy:
+  staging:
+    command: |
+      lftp -e "mirror --reverse --delete --verbose ${frontend_dir}/dist ${remote_path_staging}; bye" \
+        -u ${FTP_USERNAME},${FTP_PASSWORD} \
+        ${protocol}://${host_staging}
+  production:
+    command: |
+      lftp -e "mirror --reverse --delete --verbose ${frontend_dir}/dist ${remote_path_prod}; bye" \
+        -u ${FTP_USERNAME},${FTP_PASSWORD} \
+        ${protocol}://${host_prod}
+
+secrets:
+  - name: FTP_USERNAME
+    description: "FTP/SFTP username"
+    how_to_get: "Your hosting provider's control panel"
+    used_in: [deploy-prod-frontend, deploy-staging-frontend]
+  - name: FTP_PASSWORD
+    description: "FTP/SFTP password"
+    how_to_get: "Your hosting provider's control panel"
+    used_in: [deploy-prod-frontend, deploy-staging-frontend]
+
+workflow_action: null
+workflow_setup: |
+  - name: Install lftp
+    run: sudo apt-get install -y lftp
