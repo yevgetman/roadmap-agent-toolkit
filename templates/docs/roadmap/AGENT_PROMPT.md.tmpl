@@ -109,6 +109,11 @@ prompt work for any track without substitution tables.
 11. **ONLY operate on your own track.** Never read, modify, or
     reason about items in other tracks. Each track has its own
     agent — yours is responsible for your track's full lifecycle.
+12. **ALWAYS label issues and PRs with the track label.**
+    Every `gh issue create` and `gh pr create` MUST include
+    `--label <tracks[TRACK].meta.issue_label>`. This is how
+    work is attributed to a track. Omitting it is a rule
+    violation, not an oversight.
 
 ## Procedure
 

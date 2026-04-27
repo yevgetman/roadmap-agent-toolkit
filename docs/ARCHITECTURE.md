@@ -196,6 +196,7 @@ parameterized by `TRACK` — one prompt works for all tracks.
 9. Respect the kill switch
 10. Mark items requiring manual/external work as blocked
 11. Only operate on your own track
+12. Always label issues and PRs with the track label
 
 ### Procedure per tick
 
