@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# roadmap-agent tick script for track: ${__TRACK_NAME}
+# Runtime: Open Code
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+TRACK="${__TRACK_NAME}"
+PROMPT_FILE="$REPO_ROOT/docs/roadmap/AGENT_PROMPT.md"
+LOG_DIR="$REPO_ROOT/.roadmap/logs"
+
+mkdir -p "$LOG_DIR"
+cd "$REPO_ROOT"
+
+git fetch origin ${__PROD_BRANCH} --quiet
+git checkout ${__PROD_BRANCH} --quiet
+git pull --ff-only origin ${__PROD_BRANCH} --quiet
+
+PROMPT=$(sed -n '/^## BEGIN PROMPT$/,/^## END PROMPT$/p' "$PROMPT_FILE")
+
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] tick start: track=$TRACK runtime=open-code"
+
+open-code --non-interactive \
+  --prompt "Run with TRACK: $TRACK
+
+$PROMPT"
+
+EXIT_CODE=$?
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] tick end: track=$TRACK exit=$EXIT_CODE"
+exit $EXIT_CODE

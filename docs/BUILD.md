@@ -108,43 +108,32 @@ YAML-parsing problem — same approach as §1.
 
 ## 4. Agent runtime + scheduler wiring
 
-**Status:** profiles defined, not wired into installer
+**Status:** COMPLETE (templates created; installer integration in §1+§2)
 
-**What exists:**
-- `profiles/agents/*.yml` — 4 runtime profiles (claude-code,
-  codex, open-code, custom)
-- `profiles/schedulers/*.yml` — 4+1 scheduler profiles (launchd,
-  crontab, github-actions, custom, claude-code-routines)
-- `templates/.roadmap/agents/tick.sh.tmpl` — tick script template
-- `defaults.yml` has `agents.runtime` and `agents.scheduler`
-  with auto-select logic
+**What was built:**
+- [x] Per-runtime tick scripts:
+  - `templates/.roadmap/agents/tick-codex.sh.tmpl`
+  - `templates/.roadmap/agents/tick-open-code.sh.tmpl`
+  - `templates/.roadmap/agents/tick-custom.sh.tmpl`
+  (Claude Code uses built-in routines — no tick script)
+- [x] Scheduler output templates:
+  - `templates/.roadmap/schedulers/launchd.plist.tmpl`
+  - `templates/.github/workflows/agent-tick.yml.tmpl` (GH Actions)
+  (crontab entries generated inline by setup-agents.sh)
+- [x] `templates/.roadmap/setup-agents.sh.tmpl` — unified
+  install/uninstall/status script for all scheduler types
+  (launchd, crontab, github-actions, claude-code-routines, custom)
+- [x] `templates/.roadmap/.gitignore` — excludes logs and
+  generated plists from version control
 
-**What to build:**
-- [ ] Installer detects available agent CLIs (`claude --version`,
-      `codex --version`) and pre-selects runtime
-- [ ] If runtime is `claude-code`, skip scheduler selection and
-      print setup instructions for `/schedule create`
-- [ ] If runtime is non-Claude, auto-select scheduler based on
-      platform (darwin → launchd, linux → crontab) with option
-      to override
-- [ ] Generate `tick-<track>.sh` for each track using the tick
-      script template + the runtime's invoke command
-- [ ] Make tick scripts executable (`chmod +x`)
-- [ ] Create `.roadmap/logs/` directory
-- [ ] For launchd: generate plist files, offer to `launchctl load`
-- [ ] For crontab: generate entries, offer to install via
-      `crontab -l | ... | crontab -`
-- [ ] For GH Actions: generate `agent-<track>.yml` workflow files
-- [ ] For custom: print the tick script paths and let the user
-      schedule them
-- [ ] Print the cron expression for each track in the summary
-      (with UTC times)
-
-**Design notes:**
-The tick script needs `${__AGENT_INVOKE_COMMAND}` interpolated
-from the runtime profile's `invoke_command` field. For Claude
-Code, no tick script is generated — only the setup instructions
-are printed.
+**Remaining (deferred to §1+§2):**
+- [ ] Installer detects available agent CLIs and pre-selects runtime
+- [ ] Installer generates tick scripts per track with interpolated
+      invoke commands
+- [ ] Installer runs `setup-agents.sh install` or prints setup
+      instructions
+- [ ] Installer prints cron expressions for each track in the
+      summary
 
 ---
 

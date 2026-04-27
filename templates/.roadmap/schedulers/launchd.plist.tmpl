@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.roadmap-agent.${__REPO_NAME}.${__TRACK_NAME}</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>${__REPO_ROOT}/.roadmap/agents/tick-${__TRACK_NAME}.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>${__REPO_ROOT}</string>
+
+  <key>StartInterval</key>
+  <integer>${__CADENCE_SECONDS}</integer>
+
+  <key>StandardOutPath</key>
+  <string>${__REPO_ROOT}/.roadmap/logs/${__TRACK_NAME}.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>${__REPO_ROOT}/.roadmap/logs/${__TRACK_NAME}.err</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key>
+    <string>${__HOME}</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>KeepAlive</key>
+  <false/>
+</dict>
+</plist>

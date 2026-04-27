@@ -1,0 +1,6 @@
+# Logs are local-only — don't commit agent output
+logs/
+
+# The plist template is committed; generated plists are not
+schedulers/*.plist
+!schedulers/*.plist.tmpl

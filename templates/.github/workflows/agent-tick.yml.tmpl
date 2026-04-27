@@ -1,0 +1,49 @@
+name: Agent — ${__TRACK_NAME}
+
+# Runs one agent tick on a schedule. The agent picks up the next
+# ready item in the ${__TRACK_NAME} track, implements it, merges
+# to staging, waits for CI, and reconciles.
+#
+# Required GitHub repo secrets:
+#   AGENT_PAT  — GitHub PAT with repo write access (for pushing
+#                branches and BACKLOG updates)
+
+on:
+  schedule:
+    - cron: '${__CRON_EXPRESSION}'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Manual trigger reason'
+        required: false
+
+concurrency:
+  group: agent-${__TRACK_NAME}
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    name: ${__TRACK_NAME} agent tick
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.AGENT_PAT }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "roadmap-agent"
+          git config user.email "noreply@roadmap-agent"
+
+      - name: Install agent CLI
+        run: ${__AGENT_INSTALL_COMMAND}
+
+      - name: Run tick (track: ${__TRACK_NAME})
+        env:
+          GITHUB_TOKEN: ${{ secrets.AGENT_PAT }}
+        run: |
+          PROMPT=$(sed -n '/^## BEGIN PROMPT$/,/^## END PROMPT$/p' docs/roadmap/AGENT_PROMPT.md)
+          ${__AGENT_GHA_INVOKE_COMMAND}
