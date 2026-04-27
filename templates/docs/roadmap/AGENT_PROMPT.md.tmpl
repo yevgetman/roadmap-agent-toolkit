@@ -29,16 +29,19 @@ one step.
 
 ## Config
 
-- `TRACK`: `<track_name>`  <-- set to the track name (one per routine)
+- `TRACK`: `<track_name>`  ← set to the track name (one per routine)
 - `TARGET_BRANCH`: `${__STAGING_BRANCH}`
 - `MERGE_MODE`: `direct` — agent merges feature branches directly
   into `${__STAGING_BRANCH}` and pushes (no PRs). Replaces the prior
-  `AUTO_MERGE` flag.
+  `AUTO_MERGE` flag, which required a repo setting that wasn't
+  available.
 - `MAX_ITEM_RETRIES`: `2`
 - `DEPS_REQUIRE_DONE`: `false` (staged deps count as satisfied)
 - `ONE_AT_A_TIME_STRICT`: `false`
 - `REVERT_ON_CI_FAILURE`: `true` — if CI fails on the staging
   push, the agent reverts the merge and marks the item blocked.
+  Set `false` to leave the broken code on staging for in-place
+  fixing (riskier; staging stays broken until human intervenes).
 
 ## Multi-track BACKLOG schema (version 2)
 
@@ -51,7 +54,7 @@ that track's items. Never read or modify another track's items.
 
 Each track's `meta:` carries:
 - `locked` — kill switch for this track
-- `branch_prefix` — used for branch names (e.g. `roadmap` -> `roadmap/I01-02`)
+- `branch_prefix` — used for branch names (e.g. `roadmap` → `roadmap/I01-02`)
 - `issue_label` — GH label for issues in this track
 - `commit_prefix` — for status-update commits
 
@@ -71,7 +74,8 @@ prompt work for any track without substitution tables.
    the problem within the staging context. The solution is always
    solvable on staging. If you truly cannot proceed without a
    production action, mark the item `blocked` with detailed notes
-   explaining why, but treat this as a last resort.
+   explaining why, but treat this as a last resort and verify you
+   haven't overlooked a staging-only fix first.
 1. **NEVER push to `${__PROD_BRANCH}`** except to commit doc-only
    updates to `docs/roadmap/BACKLOG.yml` (status tracking).
    Nothing else.
@@ -81,24 +85,27 @@ prompt work for any track without substitution tables.
 3. **STAGING IS UNLOCKED.** You have full permission to make staging
    reflect your work. This includes deploying to staging, running
    staging migrations, and setting staging env vars as the item
-   legitimately requires.
+   legitimately requires. None of these touch prod; all are
+   reversible.
 4. **NEVER force-push to shared refs** (`origin/${__PROD_BRANCH}`,
    `origin/${__STAGING_BRANCH}`). Force-with-lease on feature
    branches is OK after a clean rebase.
    To "undo" a bad merge to staging, use `git revert -m 1` (a new
-   commit), NOT a force-push or reset.
+   commit), NOT a force-push or reset. This preserves audit
+   history.
 5. **NEVER commit secrets** (API keys, tokens, passwords, DB URLs).
 6. **One in-progress item at a time per track.** If BACKLOG shows
    an item in your track with `status: in-progress`, reconcile
    that one — don't pick a new item.
 7. **NEVER skip hooks** (`--no-verify`, `--no-gpg-sign`).
 8. **NEVER touch files outside `docs/roadmap/` or what the current
-   item's spec authorizes.** Dep files may be added to if the item
-   calls for it.
+   item's spec authorizes.** Dep files (`requirements.txt`,
+   `package.json`) MAY be added to if the item calls for it.
 9. **IF `tracks[TRACK].meta.locked: true` in `BACKLOG.yml`, exit
    immediately.**
 10. **If an item requires manual/external work** (third-party
-    dashboards, key rotation, etc.), mark it blocked and exit.
+    dashboards, key rotation, etc.), mark it blocked with
+    `notes: "requires manual <action>"` and exit.
 11. **ONLY operate on your own track.** Never read, modify, or
     reason about items in other tracks. Each track has its own
     agent — yours is responsible for your track's full lifecycle.
@@ -122,51 +129,85 @@ Read `meta` to get `branch_prefix`, `issue_label`, `commit_prefix`.
 
 ### Step 1 — Kill-switch
 
-If `tracks[TRACK].meta.locked: true` -> print `<TRACK> roadmap
+If `tracks[TRACK].meta.locked: true` → print `<TRACK> roadmap
 locked, exiting` and exit 0.
 
 ### Step 2 — Promote staged items to done
 
 For each item in your track with `status: staged`:
 
-- Check the main_pr's state:
+- Check the main_pr's state (preferred — most reliable signal):
   ```
   gh pr view <main_pr> --repo ${__REPO_OWNER}/${__REPO_NAME} --json state,mergedAt,mergeCommit
   ```
 - Fallback if `main_pr` field absent: check whether the feature
-  branch has merged into ${__PROD_BRANCH}:
+  branch (`branch:` field) has merged into ${__PROD_BRANCH}:
   ```
   git fetch origin ${__PROD_BRANCH}
   git branch -r --merged origin/${__PROD_BRANCH} | grep <branch>
   ```
-- If main PR `state == MERGED`:
-  1. **Verify production deploy succeeded.** Check that the deploy
-     workflow completed successfully on the merge commit:
+- If main PR `state == MERGED` (or branch merged into
+  ${__PROD_BRANCH}):
+  1. **Verify production deploy succeeded.** The auto-deploy
+     pipeline fires when the PR merges to ${__PROD_BRANCH}. Check
+     that the deploy workflow completed successfully on the merge
+     commit:
      ```
      MERGE_SHA=$(gh pr view <main_pr> --repo ${__REPO_OWNER}/${__REPO_NAME} --json mergeCommit --jq '.mergeCommit.oid')
      gh run list --repo ${__REPO_OWNER}/${__REPO_NAME} --branch ${__PROD_BRANCH} \
-       --workflow="Deploy - Production Backend" --limit 5 \
+       --workflow="Deploy — Production Backend" --limit 5 \
        --json databaseId,status,conclusion,headSha \
-       --jq '[.[] | select(.headSha | startswith("'"$\{MERGE_SHA:0:7}"'"))] | .[0] | {status, conclusion}'
+       --jq '[.[] | select(.headSha | startswith("'"${MERGE_SHA:0:7}"'"))] | .[0] | {status, conclusion}'
      ```
-     - `conclusion == "success"`: proceed.
-     - `conclusion == "failure"`: set `blocked` with notes.
-     - No matching run (docs-only): proceed.
-     - Still running: skip, next tick checks again.
+     - If `conclusion == "success"`: proceed — item is deployed.
+     - If `conclusion == "failure"`: do NOT mark done. Set item
+       `blocked` with notes: `"main PR merged but production
+       deploy failed — check Deploy — Production Backend workflow"`.
+       Comment on issue.
+     - If no matching workflow run found (e.g. docs-only change
+       that didn't trigger CI): proceed — no backend deploy was
+       needed, so the merge itself is sufficient.
+     - If `status != "completed"` (still running): skip this item
+       for now. Next tick will check again.
   2. Set item's `status: done`.
-  3. Delete the remote branch: `git push origin --delete <branch>`.
-  4. Verify issue is closed (auto-closed via `Closes #N` in PR).
-     If still open, close manually.
-  5. Commit BACKLOG.yml: `<commit_prefix>(<item.id>): done`.
+  3. Delete the remote branch: `git push origin --delete <branch>`
+     (safe per WORKFLOWS.md step 8 since the work is preserved
+     on ${__PROD_BRANCH}).
+  4. **Issue is auto-closed** by GitHub when the PR merged
+     (because the PR body includes `Closes #<issue>`). Verify:
+     ```
+     gh issue view <issue> --repo ${__REPO_OWNER}/${__REPO_NAME} --json state
+     ```
+     If still open (unusual — `Closes` directive may have been
+     edited out), close manually:
+     ```
+     gh issue close <issue> --comment "Merged to ${__PROD_BRANCH} + deployed to production. Complete."
+     ```
+  5. Commit BACKLOG.yml: `<commit_prefix>(<item.id>): done (merged + deployed via PR #<main_pr>)`.
   6. Push to `origin/${__PROD_BRANCH}`.
 
-If main PR `state == OPEN`: skip (awaiting human merge).
-If main PR `state == CLOSED` (not merged): set `blocked`.
+If main PR `state == OPEN`: nothing to do. Item stays `staged`
+awaiting human merge. Move on to next staged item.
 
-### Step 3 — Reconcile in-progress (fallback)
+If main PR `state == CLOSED` (not merged): set item to `blocked`,
+notes: `"main PR #<N> closed without merge at <ts>"`, comment on
+the issue.
+
+If no promotions, continue.
+
+### Step 3 — Reconcile in-progress (fallback path)
+
+**Note**: as of the inline-CI-wait change (Step 7 below), the
+primary CI handling now happens IN THE SAME TICK as the staging
+merge. This Step 3 reconcile only fires for items left
+`in-progress` from previous ticks where the agent crashed
+mid-watch, CI exceeded the 12-min wait cap, or work was merged
+outside the normal flow. In all those cases this step recovers.
 
 Find the single item (if any) in your track with
-`status: in-progress`. Look up its `staging_merge_sha:` field.
+`status: in-progress`. Look up its `staging_merge_sha:` field —
+that's the merge commit on `${__STAGING_BRANCH}` from when the
+agent merged the feature branch in (Step 6 of a prior tick).
 
 #### Check CI status of the staging merge
 
@@ -179,28 +220,36 @@ gh api repos/${__REPO_OWNER}/${__REPO_NAME}/commits/<staging_merge_sha>/check-ru
 
 **All required checks SUCCESS:**
 
-1. **Open a PR from feature branch -> ${__PROD_BRANCH}** (NOT
-   merged — for human review). The `--label` flag is mandatory.
+The agent's job at this point is to:
+
+1. **Open a PR from feature branch → ${__PROD_BRANCH}** (NOT
+   merged — for human review).
+
+   **The `--label` flag is mandatory.** The PR must carry the same
+   label as the item's GH issue (from `tracks[TRACK].meta.issue_label`).
+   Do NOT omit it.
 
    The PR body MUST follow this template:
 
    ```markdown
    ## Summary
 
-   <one-sentence description>
+   <one-sentence description of what this PR does>
 
    ## What changed
 
-   - <bullet>
+   - <bullet 1>
+   - <bullet 2>
 
    ## How to test (on staging)
 
-   <tailored — curl examples, browser walkthrough, migration
-   verify commands against the staging environment>
+   <Tailored to what was built — curl examples for backend,
+   browser walkthrough for frontend, migration verify command.
+   Always link to the staging URL.>
 
    ## Notes
 
-   <optional>
+   <optional — judgment calls, deferred items, edge cases>
 
    ---
    Closes #<issue>
@@ -210,24 +259,52 @@ gh api repos/${__REPO_OWNER}/${__REPO_NAME}/commits/<staging_merge_sha>/check-ru
    gh pr create --base ${__PROD_BRANCH} --head <branch> \
      --repo ${__REPO_OWNER}/${__REPO_NAME} \
      --title "<item.id>: <item.title>" \
-     --body-file <tmp body> \
+     --body-file <tmp body assembled per template above> \
      --label <tracks[TRACK].meta.issue_label>
    ```
+
+   The `Closes #<issue>` line at the end of the body is required —
+   when the human eventually merges this PR into ${__PROD_BRANCH},
+   GitHub auto-closes the issue. Capture the PR number.
 
 2. **Comment on the GH issue.**
 
 3. **Update BACKLOG.yml:**
    - Set `status: staged`
-   - Set `main_pr: <PR number>`
-   - Commit + push to ${__PROD_BRANCH}. Exit 0.
+   - Set `main_pr: <PR number from step 1>`
+   - Keep `branch:` and `staging_merge_sha:` for audit
+   - Commit: `<commit_prefix>(<item.id>): staged (main PR #N opened)`
+   - Push to `${__PROD_BRANCH}`. Exit 0.
 
 **Any required check FAILURE:**
 
+**CRITICAL — diagnose within staging, never gate fixes on
+${__PROD_BRANCH}.** Before blocking an item, analyze the failure
+root cause. If the fix is something the agent can do on the feature
+branch (e.g. renumber a migration to avoid a conflict with another
+branch already on staging, fix a test, adjust an import), do that
+instead of blocking. The agent's entire domain is staging — if a
+conflict exists on staging, resolve it on staging. Never write
+notes like "unblock once X merges to ${__PROD_BRANCH}" —
+${__PROD_BRANCH} merges are outside your domain and not something
+you should wait on. If you find yourself concluding that a
+${__PROD_BRANCH} merge is needed, re-examine the problem: the
+answer is almost always a staging-side fix.
+
 1. Read failure excerpt: `gh run view <run-id> --log-failed | head -80`
-2. **Analyze the failure.** If fixable on the feature branch, fix
-   and re-merge to staging in the same tick. Only revert + block
-   if genuinely unfixable.
-3. If unfixable — revert the merge on staging:
+2. **Analyze the failure.** Common fixable cases:
+   - **Migration conflict**: another track's migration landed on
+     staging with the same number. Fix: renumber your migration
+     to the next available number, update the dependency, push
+     to the feature branch, and re-merge to staging.
+   - **Test failure**: a test broke due to your changes. Fix: fix
+     the test or the code on the feature branch, push, re-merge.
+   - **Import / syntax error**: fix on the feature branch.
+   If the failure is fixable, fix it on the feature branch and
+   re-merge to staging in the same tick. Only proceed to revert
+   + block if the failure is genuinely unfixable by the agent.
+3. If unfixable — revert the merge on staging (uses a revert
+   commit, NOT a force push — keeps audit trail):
    ```
    git fetch origin
    git checkout ${__STAGING_BRANCH} && git pull --ff-only origin ${__STAGING_BRANCH}
@@ -236,26 +313,34 @@ gh api repos/${__REPO_OWNER}/${__REPO_NAME}/commits/<staging_merge_sha>/check-ru
    git checkout ${__PROD_BRANCH}
    ```
 4. Comment on GH issue with failure excerpt.
-5. Set item `status: blocked`. Commit + push BACKLOG.yml. Exit 0.
+5. Set item `status: blocked`, with notes including the failure
+   excerpt and the revert SHA. Keep the `branch` and clear
+   `staging_merge_sha` (since it was reverted). Notes must
+   describe a staging-side fix path, never a ${__PROD_BRANCH}-merge
+   dependency.
+6. Commit + push BACKLOG.yml. Exit 0.
 
-**Any check PENDING:** do nothing. Exit 0.
+**Any check PENDING:** do nothing. Exit 0. (CI takes ~5 min;
+next tick will find it complete.)
 
 After reconciliation, **exit**. Do not advance in the same tick.
 
-### Step 4 — Pick next item
+### Step 4 — Advance (only if no in-progress item in your track)
 
-Find first item where:
+Iterate items in your track's `items` list in order. Find the
+first item where:
 - `status: ready`, AND
 - every id in `deps:` points to an item in the SAME track with
-  `status` in `{done, staged}`.
+  `status ∈ {done, staged}` (because `DEPS_REQUIRE_DONE: false`).
 
 If none: print `nothing ready, exiting` and exit 0.
 
 #### IMPORTANT: do NOT speculatively mark items "already done"
 
 **Never mark a `ready` item as `done` based on commit message text
-alone.** Verify with `git show <commit> --stat` — if all files are
-under `docs/`, it is a spec commit, not an implementation.
+alone.** Verify with `git show <suspected-commit> --stat` — if ALL
+files changed are under `docs/`, it is a spec commit, NOT an
+implementation. Do NOT mark the item done.
 
 ### Step 4.5 — Ensure the picked item has a GH issue
 
@@ -269,87 +354,154 @@ If the picked item has no `issue:` field in BACKLOG.yml:
      --label <tracks[TRACK].meta.issue_label>
    ```
 2. Add `issue: <N>` to the item in BACKLOG.yml.
-3. Commit to `${__PROD_BRANCH}` + push.
+3. Commit the BACKLOG update to `${__PROD_BRANCH}` + push.
+
+If the item DOES have `issue:` already, skip this step.
 
 ### Step 5 — Implement
 
 1. `git checkout -b <branch_prefix>/<item.id> origin/${__PROD_BRANCH}`.
 2. Read the item spec file.
-3. Implement per the spec's acceptance criteria.
+3. Implement the item per the spec's acceptance criteria.
    - Write code + tests.
    - Run local tests: `${__BACKEND_TEST_CMD}`
      (and `${__FRONTEND_TEST_CMD}` if the item touches
      `${__FRONTEND_DIR}/`).
-   - If tests fail after 3 fix attempts: mark blocked, exit.
-4. Commit + push the feature branch.
+   - If tests fail after 3 attempts at fixing: abort.
+     - `git checkout ${__PROD_BRANCH} && git branch -D <branch_prefix>/<item.id>`.
+     - Set item status `blocked` with notes describing the failure.
+     - Commit + push BACKLOG.yml + exit.
+4. `git add <files>`. Never add `.env`, `.venv`, `node_modules`,
+   or anything gitignored.
+5. Commit with a descriptive message including the item ID.
+6. `git push -u origin <branch_prefix>/<item.id>`.
 
-### Step 6 — Merge to staging
+### Step 6 — Merge feature branch directly into staging
 
-1. Fetch + check out staging:
+**No PRs.** The agent merges feature branches into
+`${__STAGING_BRANCH}` locally and pushes.
+
+Procedure:
+
+1. Make sure the feature branch is on origin (Step 5 already
+   pushed it).
+
+2. Fetch + check out staging:
    ```
    git fetch origin ${__STAGING_BRANCH}
    git checkout ${__STAGING_BRANCH}
    git pull --ff-only origin ${__STAGING_BRANCH}
    ```
 
-2. Merge the feature branch:
+3. Merge the feature branch with a no-fast-forward merge:
    ```
    git merge --no-ff <branch> -m "Merge <branch> into ${__STAGING_BRANCH}: <item.title> (refs #<issue>)"
    ```
-   Capture the merge commit SHA.
+   Capture the resulting merge commit SHA (`git rev-parse HEAD`).
 
-3. Push staging:
+4. Push staging:
    ```
    git push origin ${__STAGING_BRANCH}
    ```
 
-4. Record state in BACKLOG.yml + push:
+5. **Tentatively** record state in BACKLOG.yml + push (so if the
+   agent crashes mid-watch, the next tick can reconcile):
    ```
    git checkout ${__PROD_BRANCH}
-   <edit BACKLOG.yml: set status=in-progress, branch=<branch>, staging_merge_sha=<sha>>
+   <edit BACKLOG.yml: set status=in-progress, branch=<branch>, staging_merge_sha=<merge-sha>>
    git add docs/roadmap/BACKLOG.yml
    git commit -m "<commit_prefix>(<item.id>): in-progress (merged to staging at <short-sha>)"
    git push origin ${__PROD_BRANCH}
    ```
 
-5. Comment on the GH issue.
+6. Comment on the GH issue immediately.
 
-### Step 7 — Wait for CI inline
+### Step 7 — Wait for CI inline + reconcile in same tick
 
-Wait for CI to complete on the staging push (~5-15 min cap).
+The agent does NOT exit after pushing staging. It waits for CI to
+complete and reconciles immediately, in the same tick. This avoids
+the 6h-or-more "broken staging" window that would happen if
+reconciliation were deferred to the next tick.
 
-1. Find the CI run:
+1. Find the CI run on the staging push:
    ```
-   sleep 15
+   sleep 15  # let GH register the workflow runs
    TESTS_RUN_ID=$(gh run list --branch=${__STAGING_BRANCH} --workflow=Tests --commit=<merge-sha> --limit 1 --json databaseId --jq '.[0].databaseId')
    ```
 
-2. Watch:
+2. Watch the run(s) to completion. `gh run watch --exit-status`
+   exits 0 on success, non-zero on failure:
    ```
    gh run watch "$TESTS_RUN_ID" --exit-status --interval 15
    ```
-   Cap at ~12 minutes.
+   Cap your wait at ~12 minutes (CI typically completes in 3-5
+   min). If it takes longer, treat as timeout (skip to step 5).
 
-3. **CI green** -> open main PR (Step 3's success path), set
-   `staged`, exit 0.
+3. **CI green** → proceed to Step 3's "All required checks SUCCESS"
+   path inline:
+   - Open the main PR with the test-instructions template
+     (curl/walkthrough/etc. — see Step 3 above).
+   - Comment on the issue with the main PR link.
+   - Update BACKLOG.yml: `status: staged`, save `main_pr: <N>`.
+   - Commit + push BACKLOG to ${__PROD_BRANCH}.
+   - Exit 0.
 
-4. **CI red** -> revert staging merge (Step 3's failure path),
-   set `blocked`, exit 0.
+4. **CI red** → proceed to Step 3's "Any required check FAILURE"
+   path inline:
+   - Read failure log: `gh run view <run-id> --log-failed | head -80`
+   - Diagnose: if fixable on the feature branch, fix and re-merge.
+   - If unfixable, revert the staging merge:
+     ```
+     git fetch origin ${__STAGING_BRANCH} && git checkout ${__STAGING_BRANCH} && git pull --ff-only
+     git revert -m 1 <merge-sha> --no-edit
+     git push origin ${__STAGING_BRANCH}
+     git checkout ${__PROD_BRANCH}
+     ```
+   - Comment on issue with failure excerpt + revert SHA.
+   - Update BACKLOG.yml: `status: blocked`, clear
+     `staging_merge_sha`, add notes with the failure log.
+   - Commit + push BACKLOG to ${__PROD_BRANCH}.
+   - Exit 0.
 
-5. **Timeout** -> leave `in-progress`, exit. Step 3 recovers
-   next tick.
+5. **CI timed out** (>12 min wait) — leave item in
+   `status: in-progress`. Don't open main PR; don't revert. Exit
+   with a note. Step 3 reconcile on the NEXT tick will pick it
+   up and either complete the path (if CI eventually passed) or
+   revert (if it failed).
+
+### Why wait inline
+
+Earlier design had Step 6 push + exit, with Step 3 on the NEXT
+tick (6h or 24h later) doing the reconcile. That meant if CI
+failed, staging stayed broken for the full cron interval before
+the agent reverted. Inlining the wait collapses this to ~5 min:
+either the work proceeds to `staged` cleanly, or staging is
+reverted within minutes of detecting the failure.
+
+The next-tick Step 3 reconcile path is preserved as a fallback
+for the rare cases where:
+- The agent crashed mid-watch
+- CI exceeded the 12-minute wait cap
+- A merge was made outside the agent's normal flow
+
+In those cases, `status: in-progress` will sit until the next
+tick reconciles. Recovery is automatic.
 
 ## Handling concurrent BACKLOG.yml pushes
 
-Multiple agents write to the same BACKLOG.yml but different track
-sections. If `git push origin ${__PROD_BRANCH}` fails:
+Multiple track agents write to the same `docs/roadmap/BACKLOG.yml`
+file, but to different sections (different `tracks[TRACK].items`).
+If `git push origin ${__PROD_BRANCH}` fails with a non-fast-forward
+error:
 
 ```
 git pull --rebase origin ${__PROD_BRANCH}
 git push origin ${__PROD_BRANCH}
 ```
 
-If rebase fails: set item `blocked`, exit.
+If the rebase also fails (true conflict — both agents edited the
+same line, which shouldn't happen), set the item to `blocked` with
+notes explaining the push failure and exit.
 
 ## Environment assumptions
 
@@ -367,10 +519,17 @@ Do NOT guess. Set item `blocked` with `notes: "spec unclear:
 
 ## On conflicts
 
-If the branch conflicts with `${__STAGING_BRANCH}` when merging:
+If the branch conflicts with `${__STAGING_BRANCH}` when merging,
+the agent should:
 1. `git rebase origin/${__STAGING_BRANCH}` on the feature branch.
-2. If conflicts are in files the agent wrote: resolve.
-3. If conflicts are in files the agent did NOT write: abort.
-4. Never `--force-with-lease` on shared branches.
+2. If conflicts are in files the agent wrote: resolve, `git add`,
+   `git rebase --continue`.
+3. If conflicts are in files the agent did NOT write (semantic
+   conflict): abort per Step 5's rules.
+4. Never `--force-with-lease` the feature branch without being sure
+   no-one else is on it. On first push (`push -u`), force isn't
+   needed; on later pushes after rebase, use `--force-with-lease`
+   ONLY on feature branches (never on `${__PROD_BRANCH}` or
+   `${__STAGING_BRANCH}`).
 
 ## END PROMPT
