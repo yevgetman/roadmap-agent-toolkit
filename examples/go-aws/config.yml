@@ -1,0 +1,54 @@
+# Go backend on AWS ECS + S3/CloudFront frontend
+# Docker-based deployment with ECR
+
+repository:
+  owner: myorg
+  name: my-go-service
+  production_branch: main
+  staging_branch: staging
+
+backend:
+  platform: aws-ecs
+  app_name_staging: my-go-service-staging
+  app_name_prod: my-go-service
+  test_command: "go test ./..."
+  migration_command: ""
+  aws_region: us-east-1
+  ecr_repo: "123456789.dkr.ecr.us-east-1.amazonaws.com/my-go-service"
+  ecs_cluster_staging: my-go-staging
+  ecs_cluster_prod: my-go-prod
+
+frontend:
+  platform: aws-s3-cloudfront
+  directory: frontend
+  test_command: "npm test"
+  build_command: "npm run build"
+  node_version_file: "frontend/.nvmrc"
+  s3_bucket_staging: my-go-service-frontend-staging
+  s3_bucket_prod: my-go-service-frontend-prod
+  cloudfront_dist_staging: E1234567890
+  cloudfront_dist_prod: E0987654321
+  aws_region: us-east-1
+
+ci:
+  database_service: postgres
+
+tracks:
+  - name: api
+    id_prefix: A
+    branch_prefix: api
+    issue_label: roadmap-api
+    north_star: "API features and reliability"
+  - name: infra
+    id_prefix: X
+    branch_prefix: infra
+    issue_label: roadmap-infra
+    north_star: "Infrastructure and DevOps"
+
+agents:
+  runtime: claude-code
+  cadence_hours: 6
+  offset_hours: 1
+
+adhoc:
+  enabled: true

@@ -257,7 +257,7 @@ Run in CI via a simple GH Actions workflow.
 
 ## 9. Update examples
 
-**Status:** partially done (one example exists)
+**Status:** COMPLETE
 
 **What to build:**
 - [ ] Update `examples/django-heroku-cloudflare/config.json` →
@@ -273,7 +273,7 @@ Run in CI via a simple GH Actions workflow.
 
 ## 10. Update documentation
 
-**Status:** docs exist but reference the old installer flow
+**Status:** COMPLETE
 
 **What to build:**
 - [ ] Update `docs/USAGE.md` to reflect schema-driven prompts,
@@ -352,6 +352,6 @@ Recommended sequence (each step is independently useful):
 5. **§6 — Save config** — COMPLETE
 6. **§7 — Idempotent re-runs** — COMPLETE
 7. **§8 — Test suite** — COMPLETE
-8. **§9 + §10 — Examples + docs** — update to match
+8. **§9 + §10 — Examples + docs** — COMPLETE
 9. **§11 — Claude Code slash command** — after the installer
    is stable, port the flow to a conversational skill

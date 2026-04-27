@@ -1,0 +1,41 @@
+# Rails + Fly.io + Vercel
+# Typical Rails API backend with a separate frontend SPA
+
+repository:
+  owner: myorg
+  name: my-rails-app
+  production_branch: main
+  staging_branch: staging
+
+backend:
+  platform: fly
+  app_name_staging: my-rails-app-staging
+  app_name_prod: my-rails-app
+  test_command: "bundle exec rails test"
+  migration_command: "bundle exec rails db:migrate"
+
+frontend:
+  platform: vercel
+  directory: frontend
+  test_command: "npm test"
+  build_command: "npm run build"
+  node_version_file: "frontend/.nvmrc"
+
+ci:
+  database_service: postgres
+  python_version: ""
+
+tracks:
+  - name: core
+    id_prefix: C
+    branch_prefix: core
+    issue_label: roadmap-core
+    north_star: "Core product features"
+
+agents:
+  runtime: claude-code
+  cadence_hours: 6
+  offset_hours: 1
+
+adhoc:
+  enabled: true

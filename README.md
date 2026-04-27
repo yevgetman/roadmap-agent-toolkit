@@ -75,11 +75,19 @@ your-repo/
 
 | Component | Options |
 |---|---|
-| Backend deploy | Heroku, Fly.io, Custom |
-| Frontend deploy | Cloudflare Pages, Vercel, Custom |
-| Staging migrations | Heroku, Custom |
+| Backend deploy | Heroku, Fly.io, AWS ECS/Fargate, GCP Cloud Run, Railway, Render, Custom |
+| Frontend deploy | Cloudflare Pages, Vercel, Netlify, AWS S3+CloudFront, FTP/SFTP, Custom |
+| Agent runtime | Claude Code, OpenAI Codex, Open Code, Custom |
+| Scheduler | Claude Code routines, launchd (macOS), crontab, GH Actions cron, Custom |
 | CI platform | GitHub Actions |
 | Issue tracker | GitHub Issues |
+
+## Examples
+
+- [`django-heroku-cloudflare`](examples/django-heroku-cloudflare/) — Django + Heroku + CF Pages (3 tracks)
+- [`rails-fly-vercel`](examples/rails-fly-vercel/) — Rails + Fly.io + Vercel (1 track)
+- [`nextjs-vercel`](examples/nextjs-vercel/) — Next.js fullstack on Vercel (Codex runtime)
+- [`go-aws`](examples/go-aws/) — Go + AWS ECS + S3/CloudFront (2 tracks)
 
 ## Design principles
 

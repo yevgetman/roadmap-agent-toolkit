@@ -1,0 +1,53 @@
+# Django + Heroku + Cloudflare Pages
+# Reference: github.com/yevgetman/django-munky (3 tracks + adhoc)
+
+repository:
+  owner: yevgetman
+  name: django-munky
+  production_branch: main
+  staging_branch: staging
+
+backend:
+  platform: heroku
+  app_name_staging: django-munky-staging
+  app_name_prod: django-munky-v2
+  test_command: "python manage.py test api.tests --noinput"
+  migration_command: "python manage.py migrate --noinput"
+
+frontend:
+  platform: cloudflare-pages
+  directory: frontend-legacy
+  project_name_staging: django-munky-staging
+  project_name_prod: django-munky-prod
+  test_command: "npm test"
+  build_command: "npm run build"
+  node_version_file: "frontend-legacy/.nvmrc"
+
+ci:
+  database_service: mysql
+  python_version: "3.12"
+
+tracks:
+  - name: saas
+    id_prefix: I
+    branch_prefix: roadmap
+    issue_label: roadmap-saas
+    north_star: "Self-serve SaaS product"
+  - name: platform
+    id_prefix: P
+    branch_prefix: platform
+    issue_label: roadmap-platform
+    north_star: "Platform improvements"
+  - name: ai
+    id_prefix: A
+    branch_prefix: ai
+    issue_label: roadmap-ai
+    north_star: "AI-powered features"
+
+agents:
+  runtime: claude-code
+  cadence_hours: 6
+  offset_hours: 1
+
+adhoc:
+  enabled: true

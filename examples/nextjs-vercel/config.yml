@@ -1,0 +1,38 @@
+# Next.js fullstack on Vercel
+# Monorepo where Vercel handles both frontend and API routes
+
+repository:
+  owner: myorg
+  name: my-nextjs-app
+  production_branch: main
+  staging_branch: staging
+
+backend:
+  platform: none
+  test_command: "npm test"
+  migration_command: ""
+
+frontend:
+  platform: vercel
+  directory: "."
+  test_command: "npm test"
+  build_command: "npm run build"
+  node_version_file: ".nvmrc"
+
+ci:
+  database_service: sqlite
+
+tracks:
+  - name: product
+    id_prefix: P
+    branch_prefix: product
+    issue_label: roadmap-product
+    north_star: "Product features and improvements"
+
+agents:
+  runtime: codex
+  cadence_hours: 6
+  offset_hours: 1
+
+adhoc:
+  enabled: false
