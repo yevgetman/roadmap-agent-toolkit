@@ -1,0 +1,346 @@
+# defaults.yml — Configuration schema + rational defaults
+#
+# Every configurable option in the toolkit is defined here with
+# its default value, type, description, and which templates use it.
+#
+# The installer reads this schema to:
+#   1. Know what to ask the user
+#   2. Pre-fill sensible defaults
+#   3. Validate input
+#   4. Map values to template variables
+#
+# Users can also pass a config file (YAML) to skip interactive
+# prompts entirely: ./install.sh --config my-config.yml
+#
+# Sections:
+#   repository    — git repo identity + branch model
+#   backend       — backend platform, deploy, test, migrations
+#   frontend      — frontend platform, deploy, test, build
+#   ci            — CI platform, database service, language versions
+#   tracks        — roadmap track definitions
+#   agents        — scheduling cadence, LLM provider preference
+#   adhoc         — ad-hoc issue agent config
+
+# ─────────────────────────────────────────────────────────────────
+# REPOSITORY
+# ─────────────────────────────────────────────────────────────────
+
+repository:
+  owner:
+    default: null                # auto-detected from git remote
+    type: string
+    required: true
+    prompt: "GitHub owner/org"
+    template_var: __REPO_OWNER
+
+  name:
+    default: null                # auto-detected from git remote
+    type: string
+    required: true
+    prompt: "Repository name"
+    template_var: __REPO_NAME
+
+  production_branch:
+    default: "main"
+    type: string
+    prompt: "Production branch"
+    template_var: __PROD_BRANCH
+
+  staging_branch:
+    default: "staging"
+    type: string
+    prompt: "Staging branch"
+    template_var: __STAGING_BRANCH
+
+  auto_delete_branches:
+    default: true
+    type: boolean
+    prompt: "Auto-delete branches on PR merge?"
+    notes: "Enables 'Automatically delete head branches' in repo settings via gh API"
+
+# ─────────────────────────────────────────────────────────────────
+# BACKEND
+# ─────────────────────────────────────────────────────────────────
+
+backend:
+  platform:
+    default: null                # user must choose
+    type: choice
+    options: [heroku, fly, custom, none]
+    prompt: "Backend platform"
+    required: true
+    notes: "Determines which deploy workflow variant is generated"
+
+  app_name_staging:
+    default: "${repository.name}-staging"
+    type: string
+    prompt: "Staging backend app name"
+    template_var: __BACKEND_APP_STAGING
+    condition: "backend.platform != none"
+
+  app_name_prod:
+    default: "${repository.name}-prod"
+    type: string
+    prompt: "Production backend app name"
+    template_var: __BACKEND_APP_PROD
+    condition: "backend.platform != none"
+
+  test_command:
+    default: null                # auto-detected or user-set
+    type: string
+    prompt: "Backend test command"
+    template_var: __BACKEND_TEST_CMD
+    auto_detect:
+      - file: "manage.py"
+        value: "python manage.py test --noinput"
+      - file: "Gemfile"
+        value: "bundle exec rails test"
+      - file: "go.mod"
+        value: "go test ./..."
+      - file: "Cargo.toml"
+        value: "cargo test"
+    notes: "Auto-detected from project files if possible, otherwise user must provide"
+
+  migration_command:
+    default: null                # auto-detected or user-set; null = no migrations
+    type: string
+    prompt: "Migration command (leave empty if none)"
+    template_var: __MIGRATION_CMD
+    auto_detect:
+      - file: "manage.py"
+        value: "python manage.py migrate --noinput"
+      - file: "Gemfile"
+        value: "bundle exec rails db:migrate"
+    notes: "null/empty = no migration workflow generated"
+
+  paths_ignore:
+    default:
+      - "**.md"
+      - "docs/**"
+      - "frontend/**"
+      - ".gitignore"
+    type: list
+    prompt: "Paths to ignore for backend CI (one per line)"
+    notes: "Files matching these patterns do NOT trigger backend tests"
+
+# ─────────────────────────────────────────────────────────────────
+# FRONTEND
+# ─────────────────────────────────────────────────────────────────
+
+frontend:
+  platform:
+    default: null                # user must choose
+    type: choice
+    options: [cloudflare-pages, vercel, custom, none]
+    prompt: "Frontend platform"
+    required: true
+
+  directory:
+    default: "frontend"
+    type: string
+    prompt: "Frontend directory"
+    template_var: __FRONTEND_DIR
+    condition: "frontend.platform != none"
+
+  project_name_staging:
+    default: "${repository.name}-staging"
+    type: string
+    prompt: "Staging frontend project name"
+    template_var: __FRONTEND_PROJECT_STAGING
+    condition: "frontend.platform != none"
+
+  project_name_prod:
+    default: "${repository.name}-prod"
+    type: string
+    prompt: "Production frontend project name"
+    template_var: __FRONTEND_PROJECT_PROD
+    condition: "frontend.platform != none"
+
+  test_command:
+    default: "npm test"
+    type: string
+    prompt: "Frontend test command"
+    template_var: __FRONTEND_TEST_CMD
+    condition: "frontend.platform != none"
+
+  build_command:
+    default: "npm run build"
+    type: string
+    prompt: "Frontend build command"
+    template_var: __FRONTEND_BUILD_CMD
+    condition: "frontend.platform != none"
+
+  node_version_file:
+    default: "frontend/.nvmrc"
+    type: string
+    prompt: "Node version file path"
+    template_var: __NODE_VERSION_FILE
+    condition: "frontend.platform != none"
+
+# ─────────────────────────────────────────────────────────────────
+# CI
+# ─────────────────────────────────────────────────────────────────
+
+ci:
+  platform:
+    default: "github-actions"
+    type: choice
+    options: [github-actions]
+    prompt: "CI platform"
+    notes: "Only GitHub Actions is supported in this version"
+
+  database_service:
+    default: "sqlite"
+    type: choice
+    options: [mysql, postgres, sqlite]
+    prompt: "Database for CI tests"
+    template_var: __DB_SERVICE
+    notes: "sqlite = no service container needed; simplest default"
+
+  python_version:
+    default: "3.12"
+    type: string
+    prompt: "Python version for CI (leave empty if not a Python project)"
+    template_var: __PYTHON_VERSION
+
+  backend_ci_workflow_name:
+    default: "Tests"
+    type: string
+    prompt: "Backend CI workflow display name"
+    notes: "Must match exactly — deploy workflows reference this via workflow_run"
+
+  frontend_ci_workflow_name:
+    default: "Frontend Tests"
+    type: string
+    prompt: "Frontend CI workflow display name"
+
+  deploy_backend_workflow_name:
+    default: "Deploy — Production Backend"
+    type: string
+    prompt: "Backend deploy workflow display name"
+    notes: "Agent uses this name to verify deploys in Step 2 (promote staged → done)"
+
+  deploy_frontend_workflow_name:
+    default: "Deploy — Production Frontend"
+    type: string
+    prompt: "Frontend deploy workflow display name"
+
+# ─────────────────────────────────────────────────────────────────
+# TRACKS
+# ─────────────────────────────────────────────────────────────────
+
+tracks:
+  count:
+    default: 1
+    type: integer
+    min: 1
+    max: 10
+    prompt: "How many roadmap tracks?"
+
+  # Per-track defaults (applied to each track, overridable)
+  per_track_defaults:
+    name:
+      default: "core"
+      type: string
+      prompt: "Track name"
+
+    id_prefix:
+      default: "C"
+      type: string
+      prompt: "ID prefix (1-2 chars, e.g. I, P, A)"
+      notes: "Items will be named <prefix>01-01, <prefix>01-02, etc."
+
+    branch_prefix:
+      default: "roadmap"
+      type: string
+      prompt: "Branch prefix"
+      notes: "Feature branches will be <prefix>/<id>"
+
+    issue_label:
+      default: "roadmap-${track.name}"
+      type: string
+      prompt: "GitHub issue label"
+
+    label_color:
+      default: null              # auto-assigned from a palette
+      type: string
+      prompt: "Label color (hex, no #)"
+      notes: "Auto-assigned if not specified: FF6B35, 2EA043, 0969DA, 8957E5, BF3989, CF222E"
+
+    north_star:
+      default: ""
+      type: string
+      prompt: "North star (one sentence describing the track's goal)"
+
+# ─────────────────────────────────────────────────────────────────
+# AGENTS
+# ─────────────────────────────────────────────────────────────────
+
+agents:
+  cadence_hours:
+    default: 6
+    type: integer
+    min: 1
+    max: 24
+    prompt: "Agent tick cadence (hours)"
+    notes: "Each track's agent fires every N hours, offset by 1 hour from the previous"
+
+  offset_hours:
+    default: 1
+    type: integer
+    min: 1
+    max: 6
+    prompt: "Offset between agents (hours)"
+    notes: "Track 1 at :00, track 2 at :01*offset, track 3 at :02*offset, etc."
+
+  llm_provider:
+    default: "any"
+    type: choice
+    options: [claude, openai, any]
+    prompt: "LLM provider preference (for documentation only)"
+    notes: "This only affects text in generated docs — no code dependency is created"
+
+# ─────────────────────────────────────────────────────────────────
+# AD-HOC AGENT
+# ─────────────────────────────────────────────────────────────────
+
+adhoc:
+  enabled:
+    default: true
+    type: boolean
+    prompt: "Include ad-hoc issue handling agent?"
+
+  labels:
+    default:
+      - "adhoc:in-progress"
+      - "adhoc:staged"
+      - "adhoc:blocked"
+      - "adhoc:needs-clarification"
+      - "adhoc:not-actionable"
+    type: list
+    notes: "Created automatically during GH label setup"
+
+# ─────────────────────────────────────────────────────────────────
+# SECRETS (not stored — just documents what the user needs to set)
+# ─────────────────────────────────────────────────────────────────
+
+secrets:
+  heroku:
+    - name: HEROKU_API_KEY
+      scope: "backend deploy + staging migrations"
+      condition: "backend.platform == heroku"
+  cloudflare:
+    - name: CLOUDFLARE_API_TOKEN
+      scope: "frontend deploy (Pages Edit permission)"
+      condition: "frontend.platform == cloudflare-pages"
+    - name: CLOUDFLARE_ACCOUNT_ID
+      scope: "frontend deploy"
+      condition: "frontend.platform == cloudflare-pages"
+  vercel:
+    - name: VERCEL_TOKEN
+      scope: "frontend deploy"
+      condition: "frontend.platform == vercel"
+  fly:
+    - name: FLY_API_TOKEN
+      scope: "backend deploy"
+      condition: "backend.platform == fly"
