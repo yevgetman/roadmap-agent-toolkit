@@ -1,0 +1,45 @@
+# AWS S3 + CloudFront frontend deploy profile
+#
+# Deploy method: sync build output to S3, invalidate CloudFront cache
+
+name: AWS S3 + CloudFront
+slug: aws-s3-cloudfront
+
+prompts:
+  - key: s3_bucket_staging
+    prompt: "Staging S3 bucket name"
+    default: "${repo_name}-staging"
+  - key: s3_bucket_prod
+    prompt: "Production S3 bucket name"
+    default: "${repo_name}-prod"
+  - key: cloudfront_distribution_staging
+    prompt: "Staging CloudFront distribution ID (empty to skip invalidation)"
+    default: null
+  - key: cloudfront_distribution_prod
+    prompt: "Production CloudFront distribution ID (empty to skip invalidation)"
+    default: null
+  - key: aws_region
+    prompt: "AWS region"
+    default: "us-east-1"
+
+deploy:
+  staging:
+    command: |
+      aws s3 sync ${frontend_dir}/dist s3://${s3_bucket_staging} --delete --region ${aws_region}
+      [ -n "${cloudfront_distribution_staging}" ] && aws cloudfront create-invalidation --distribution-id ${cloudfront_distribution_staging} --paths "/*" || true
+  production:
+    command: |
+      aws s3 sync ${frontend_dir}/dist s3://${s3_bucket_prod} --delete --region ${aws_region}
+      [ -n "${cloudfront_distribution_prod}" ] && aws cloudfront create-invalidation --distribution-id ${cloudfront_distribution_prod} --paths "/*" || true
+
+secrets:
+  - name: AWS_ACCESS_KEY_ID
+    description: "IAM access key with S3 write + CloudFront invalidation permissions"
+    how_to_get: "IAM → Users → Security credentials → Create access key"
+    used_in: [deploy-prod-frontend, deploy-staging-frontend]
+  - name: AWS_SECRET_ACCESS_KEY
+    description: "IAM secret key"
+    how_to_get: "Created alongside the access key"
+    used_in: [deploy-prod-frontend, deploy-staging-frontend]
+
+workflow_action: null

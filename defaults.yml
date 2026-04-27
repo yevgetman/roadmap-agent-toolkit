@@ -66,10 +66,14 @@ backend:
   platform:
     default: null                # user must choose
     type: choice
-    options: [heroku, fly, custom, none]
+    options: [heroku, fly, aws-ecs, railway, render, custom, none]
     prompt: "Backend platform"
     required: true
-    notes: "Determines which deploy workflow variant is generated"
+    profiles_dir: profiles/backend/
+    notes: >
+      Each option loads a deploy profile from profiles/backend/<slug>.yml
+      that pre-fills deploy commands, auth secrets, migration commands,
+      and health checks. User confirms or overrides each value.
 
   app_name_staging:
     default: "${repository.name}-staging"
@@ -131,9 +135,13 @@ frontend:
   platform:
     default: null                # user must choose
     type: choice
-    options: [cloudflare-pages, vercel, custom, none]
+    options: [cloudflare-pages, vercel, netlify, aws-s3-cloudfront, custom, none]
     prompt: "Frontend platform"
     required: true
+    profiles_dir: profiles/frontend/
+    notes: >
+      Each option loads a deploy profile from profiles/frontend/<slug>.yml
+      that pre-fills deploy commands and auth secrets.
 
   directory:
     default: "frontend"

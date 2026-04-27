@@ -1,0 +1,72 @@
+# AWS ECS/Fargate backend deploy profile
+#
+# Deploy method: build Docker image, push to ECR, update ECS service
+# Requires: Dockerfile, ECR repo, ECS cluster + service
+
+name: AWS ECS / Fargate
+slug: aws-ecs
+
+prompts:
+  - key: aws_region
+    prompt: "AWS region"
+    default: "us-east-1"
+  - key: ecr_repo
+    prompt: "ECR repository URI (e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com/myapp)"
+    default: null
+  - key: ecs_cluster_staging
+    prompt: "ECS cluster name (staging)"
+    default: "${repo_name}-staging"
+  - key: ecs_service_staging
+    prompt: "ECS service name (staging)"
+    default: "${repo_name}-staging"
+  - key: ecs_cluster_prod
+    prompt: "ECS cluster name (production)"
+    default: "${repo_name}-prod"
+  - key: ecs_service_prod
+    prompt: "ECS service name (production)"
+    default: "${repo_name}-prod"
+  - key: migration_task_def
+    prompt: "ECS task definition for migrations (leave empty to skip)"
+    default: null
+
+deploy:
+  staging:
+    command: |
+      aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin ${ecr_repo}
+      docker build -t ${ecr_repo}:staging-${GITHUB_SHA::7} .
+      docker push ${ecr_repo}:staging-${GITHUB_SHA::7}
+      aws ecs update-service --cluster ${ecs_cluster_staging} --service ${ecs_service_staging} --force-new-deployment --region ${aws_region}
+  production:
+    command: |
+      aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin ${ecr_repo}
+      docker build -t ${ecr_repo}:prod-${GITHUB_SHA::7} .
+      docker push ${ecr_repo}:prod-${GITHUB_SHA::7}
+      aws ecs update-service --cluster ${ecs_cluster_prod} --service ${ecs_service_prod} --force-new-deployment --region ${aws_region}
+    full_clone: false
+
+migration:
+  staging:
+    command: "aws ecs run-task --cluster ${ecs_cluster_staging} --task-definition ${migration_task_def} --region ${aws_region} --launch-type FARGATE"
+  production:
+    command: "aws ecs run-task --cluster ${ecs_cluster_prod} --task-definition ${migration_task_def} --region ${aws_region} --launch-type FARGATE"
+
+health_check:
+  staging:
+    command: "aws ecs describe-services --cluster ${ecs_cluster_staging} --services ${ecs_service_staging} --region ${aws_region} --query 'services[0].{status:status,running:runningCount,desired:desiredCount}'"
+  production:
+    command: "aws ecs describe-services --cluster ${ecs_cluster_prod} --services ${ecs_service_prod} --region ${aws_region} --query 'services[0].{status:status,running:runningCount,desired:desiredCount}'"
+
+secrets:
+  - name: AWS_ACCESS_KEY_ID
+    description: "IAM access key with ECR push + ECS deploy permissions"
+    how_to_get: "IAM → Users → Security credentials → Create access key"
+    used_in: [deploy-prod-backend, staging-migrate]
+  - name: AWS_SECRET_ACCESS_KEY
+    description: "IAM secret key (pair with AWS_ACCESS_KEY_ID)"
+    how_to_get: "Created alongside the access key"
+    used_in: [deploy-prod-backend, staging-migrate]
+
+staging_agent_fallbacks:
+  deploy: "aws ecs update-service --cluster ${ecs_cluster_staging} --service ${ecs_service_staging} --force-new-deployment"
+  migrate: "aws ecs run-task --cluster ${ecs_cluster_staging} --task-definition ${migration_task_def}"
+  env_var: "Not applicable — update task definition environment variables in AWS console or via aws ecs register-task-definition"

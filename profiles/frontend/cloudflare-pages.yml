@@ -1,0 +1,33 @@
+# Cloudflare Pages frontend deploy profile
+
+name: Cloudflare Pages
+slug: cloudflare-pages
+
+prompts:
+  - key: project_name_staging
+    prompt: "Staging Pages project name"
+    default: "${repo_name}-staging"
+  - key: project_name_prod
+    prompt: "Production Pages project name"
+    default: "${repo_name}-prod"
+  - key: account_id
+    prompt: "Cloudflare account ID"
+    default: null
+
+deploy:
+  staging:
+    command: "wrangler pages deploy ${frontend_dir}/dist --project-name=${project_name_staging} --branch=staging --commit-dirty=true"
+  production:
+    command: "wrangler pages deploy ${frontend_dir}/dist --project-name=${project_name_prod} --branch=main --commit-dirty=true"
+
+secrets:
+  - name: CLOUDFLARE_API_TOKEN
+    description: "API token with Cloudflare Pages Edit permission"
+    how_to_get: "https://dash.cloudflare.com/profile/api-tokens → Create Token → Edit Cloudflare Workers"
+    used_in: [deploy-prod-frontend, deploy-staging-frontend]
+  - name: CLOUDFLARE_ACCOUNT_ID
+    description: "Cloudflare account ID"
+    how_to_get: "Dashboard → any zone → Overview → right sidebar → Account ID"
+    used_in: [deploy-prod-frontend, deploy-staging-frontend]
+
+workflow_action: "cloudflare/wrangler-action@v3"

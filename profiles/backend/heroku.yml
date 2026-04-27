@@ -1,0 +1,63 @@
+# Heroku backend deploy profile
+#
+# Deploy method: git push to Heroku git remote
+# Requires full clone (fetch-depth: 0) — Heroku rejects shallow pushes
+
+name: Heroku
+slug: heroku
+
+prompts:
+  - key: app_name_staging
+    prompt: "Staging app name"
+    default: "${repo_name}-staging"
+  - key: app_name_prod
+    prompt: "Production app name"
+    default: "${repo_name}-prod"
+
+deploy:
+  staging:
+    command: |
+      git remote add heroku-staging https://heroku:${HEROKU_API_KEY}@git.heroku.com/${app_name_staging}.git
+      git push heroku-staging ${staging_branch}:main --force
+  production:
+    command: |
+      git remote add heroku https://heroku:${HEROKU_API_KEY}@git.heroku.com/${app_name_prod}.git
+      git push heroku ${prod_branch}:main --force
+    full_clone: true
+
+migration:
+  staging:
+    command: "heroku run --no-tty --exit-code -a ${app_name_staging} -- ${migration_cmd}"
+  production:
+    command: "heroku run --no-tty --exit-code -a ${app_name_prod} -- ${migration_cmd}"
+
+health_check:
+  staging:
+    command: |
+      heroku ps -a ${app_name_staging}
+      heroku releases -a ${app_name_staging} --num 3
+  production:
+    command: |
+      heroku ps -a ${app_name_prod}
+      heroku releases -a ${app_name_prod} --num 3
+
+wait_for_release:
+  enabled: true
+  command: |
+    for i in $(seq 1 30); do
+      STATUS=$(heroku releases -a ${app} --num 1 --json | python3 -c "import sys,json; print(json.load(sys.stdin)[0].get('status','pending'))" 2>/dev/null || echo "pending")
+      [ "$STATUS" = "succeeded" ] && exit 0
+      [ "$STATUS" = "failed" ] && exit 1
+      sleep 10
+    done
+
+secrets:
+  - name: HEROKU_API_KEY
+    description: "Heroku account API key"
+    how_to_get: "https://dashboard.heroku.com/account → API Key → Reveal"
+    used_in: [deploy-prod-backend, deploy-staging-backend, staging-migrate]
+
+staging_agent_fallbacks:
+  deploy: "git push heroku-staging ${staging_branch}:main"
+  migrate: "heroku run -a ${app_name_staging} -- ${migration_cmd}"
+  env_var: "heroku config:set <KEY>=<VALUE> -a ${app_name_staging}"

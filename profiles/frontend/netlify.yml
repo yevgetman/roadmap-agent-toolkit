@@ -1,0 +1,26 @@
+# Netlify frontend deploy profile
+
+name: Netlify
+slug: netlify
+
+prompts:
+  - key: site_id_staging
+    prompt: "Staging site ID"
+    default: null
+  - key: site_id_prod
+    prompt: "Production site ID"
+    default: null
+
+deploy:
+  staging:
+    command: "netlify deploy --dir=${frontend_dir}/dist --site=${site_id_staging} --auth=$NETLIFY_AUTH_TOKEN"
+  production:
+    command: "netlify deploy --prod --dir=${frontend_dir}/dist --site=${site_id_prod} --auth=$NETLIFY_AUTH_TOKEN"
+
+secrets:
+  - name: NETLIFY_AUTH_TOKEN
+    description: "Netlify personal access token"
+    how_to_get: "https://app.netlify.com/user/applications#personal-access-tokens"
+    used_in: [deploy-prod-frontend, deploy-staging-frontend]
+
+workflow_action: null

@@ -1,0 +1,37 @@
+# Vercel frontend deploy profile
+
+name: Vercel
+slug: vercel
+
+prompts:
+  - key: org_id
+    prompt: "Vercel org ID"
+    default: null
+  - key: project_id_staging
+    prompt: "Staging project ID"
+    default: null
+  - key: project_id_prod
+    prompt: "Production project ID"
+    default: null
+
+deploy:
+  staging:
+    command: "vercel deploy --token=$VERCEL_TOKEN --scope=$VERCEL_ORG_ID --yes"
+  production:
+    command: "vercel deploy --prod --token=$VERCEL_TOKEN --scope=$VERCEL_ORG_ID --yes"
+
+secrets:
+  - name: VERCEL_TOKEN
+    description: "Vercel personal access token"
+    how_to_get: "https://vercel.com/account/tokens"
+    used_in: [deploy-prod-frontend, deploy-staging-frontend]
+  - name: VERCEL_ORG_ID
+    description: "Vercel org/team ID"
+    how_to_get: "Vercel dashboard → Settings → General → Team ID"
+    used_in: [deploy-prod-frontend, deploy-staging-frontend]
+  - name: VERCEL_PROJECT_ID
+    description: "Vercel project ID"
+    how_to_get: "Vercel dashboard → Project → Settings → General → Project ID"
+    used_in: [deploy-prod-frontend, deploy-staging-frontend]
+
+workflow_action: null

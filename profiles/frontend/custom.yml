@@ -1,0 +1,27 @@
+# Custom frontend deploy profile
+
+name: Custom
+slug: custom
+
+prompts:
+  - key: staging_deploy_command
+    prompt: "Staging deploy command"
+    default: null
+    required: true
+  - key: prod_deploy_command
+    prompt: "Production deploy command"
+    default: null
+    required: true
+  - key: secrets_list
+    prompt: "GitHub secrets needed (comma-separated names)"
+    default: null
+
+deploy:
+  staging:
+    command: "${staging_deploy_command}"
+  production:
+    command: "${prod_deploy_command}"
+
+secrets: []
+
+workflow_action: null

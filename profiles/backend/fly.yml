@@ -1,0 +1,45 @@
+# Fly.io backend deploy profile
+#
+# Deploy method: flyctl deploy (Docker-based)
+# Requires a fly.toml in the repo root (or specified path)
+
+name: Fly.io
+slug: fly
+
+prompts:
+  - key: app_name_staging
+    prompt: "Staging app name"
+    default: "${repo_name}-staging"
+  - key: app_name_prod
+    prompt: "Production app name"
+    default: "${repo_name}-prod"
+
+deploy:
+  staging:
+    command: "flyctl deploy --app ${app_name_staging} --remote-only"
+  production:
+    command: "flyctl deploy --app ${app_name_prod} --remote-only"
+    full_clone: false
+
+migration:
+  staging:
+    command: "flyctl ssh console -a ${app_name_staging} -C '${migration_cmd}'"
+  production:
+    command: "flyctl ssh console -a ${app_name_prod} -C '${migration_cmd}'"
+
+health_check:
+  staging:
+    command: "flyctl status -a ${app_name_staging}"
+  production:
+    command: "flyctl status -a ${app_name_prod}"
+
+secrets:
+  - name: FLY_API_TOKEN
+    description: "Fly.io API token"
+    how_to_get: "flyctl tokens create deploy -a <app>"
+    used_in: [deploy-prod-backend, staging-migrate]
+
+staging_agent_fallbacks:
+  deploy: "flyctl deploy --app ${app_name_staging} --remote-only"
+  migrate: "flyctl ssh console -a ${app_name_staging} -C '${migration_cmd}'"
+  env_var: "flyctl secrets set <KEY>=<VALUE> -a ${app_name_staging}"

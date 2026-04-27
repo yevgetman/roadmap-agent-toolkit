@@ -1,0 +1,54 @@
+# Railway backend deploy profile
+#
+# Deploy method: Railway CLI or GitHub integration
+# Railway auto-deploys from linked branches by default
+
+name: Railway
+slug: railway
+
+prompts:
+  - key: project_id
+    prompt: "Railway project ID"
+    default: null
+  - key: service_staging
+    prompt: "Staging service name"
+    default: "${repo_name}-staging"
+  - key: service_prod
+    prompt: "Production service name"
+    default: "${repo_name}-prod"
+  - key: environment_staging
+    prompt: "Staging environment name"
+    default: "staging"
+  - key: environment_prod
+    prompt: "Production environment name"
+    default: "production"
+
+deploy:
+  staging:
+    command: "railway up --service ${service_staging} --environment ${environment_staging}"
+  production:
+    command: "railway up --service ${service_prod} --environment ${environment_prod}"
+    full_clone: false
+
+migration:
+  staging:
+    command: "railway run --service ${service_staging} --environment ${environment_staging} ${migration_cmd}"
+  production:
+    command: "railway run --service ${service_prod} --environment ${environment_prod} ${migration_cmd}"
+
+health_check:
+  staging:
+    command: "railway status --service ${service_staging} --environment ${environment_staging}"
+  production:
+    command: "railway status --service ${service_prod} --environment ${environment_prod}"
+
+secrets:
+  - name: RAILWAY_TOKEN
+    description: "Railway project token"
+    how_to_get: "Railway dashboard → Project → Settings → Tokens → Create"
+    used_in: [deploy-prod-backend, staging-migrate]
+
+staging_agent_fallbacks:
+  deploy: "railway up --service ${service_staging} --environment ${environment_staging}"
+  migrate: "railway run --service ${service_staging} --environment ${environment_staging} ${migration_cmd}"
+  env_var: "railway variables set <KEY>=<VALUE> --service ${service_staging} --environment ${environment_staging}"

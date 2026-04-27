@@ -1,0 +1,52 @@
+# Render backend deploy profile
+#
+# Deploy method: Render auto-deploys from linked branch, or deploy hook
+# Render has native GitHub integration with auto-deploy on push
+
+name: Render
+slug: render
+
+prompts:
+  - key: service_id_staging
+    prompt: "Staging service ID (from Render dashboard URL)"
+    default: null
+  - key: service_id_prod
+    prompt: "Production service ID"
+    default: null
+  - key: deploy_hook_staging
+    prompt: "Staging deploy hook URL (optional — Render auto-deploys from branch)"
+    default: null
+  - key: deploy_hook_prod
+    prompt: "Production deploy hook URL (optional)"
+    default: null
+
+deploy:
+  staging:
+    command: "curl -s -X POST ${deploy_hook_staging}"
+    notes: "If using Render's native GitHub integration, the deploy fires automatically on push. The hook is a fallback."
+  production:
+    command: "curl -s -X POST ${deploy_hook_prod}"
+    full_clone: false
+
+migration:
+  staging:
+    command: "curl -s -X POST https://api.render.com/v1/services/${service_id_staging}/jobs -H 'Authorization: Bearer ${RENDER_API_KEY}' -H 'Content-Type: application/json' -d '{\"startCommand\":\"${migration_cmd}\"}'"
+  production:
+    command: "curl -s -X POST https://api.render.com/v1/services/${service_id_prod}/jobs -H 'Authorization: Bearer ${RENDER_API_KEY}' -H 'Content-Type: application/json' -d '{\"startCommand\":\"${migration_cmd}\"}'"
+
+health_check:
+  staging:
+    command: "curl -s https://api.render.com/v1/services/${service_id_staging} -H 'Authorization: Bearer ${RENDER_API_KEY}' | python3 -c \"import sys,json; s=json.load(sys.stdin); print(s.get('status','unknown'))\""
+  production:
+    command: "curl -s https://api.render.com/v1/services/${service_id_prod} -H 'Authorization: Bearer ${RENDER_API_KEY}' | python3 -c \"import sys,json; s=json.load(sys.stdin); print(s.get('status','unknown'))\""
+
+secrets:
+  - name: RENDER_API_KEY
+    description: "Render API key"
+    how_to_get: "Render dashboard → Account Settings → API Keys"
+    used_in: [deploy-prod-backend, staging-migrate]
+
+staging_agent_fallbacks:
+  deploy: "curl -s -X POST ${deploy_hook_staging}"
+  migrate: "Trigger via Render API (see migration command above)"
+  env_var: "Render dashboard → Service → Environment → Add variable"

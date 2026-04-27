@@ -1,0 +1,63 @@
+# Custom backend deploy profile
+#
+# For platforms not covered by built-in profiles.
+# User provides all commands and secrets directly.
+
+name: Custom
+slug: custom
+
+prompts:
+  - key: staging_deploy_command
+    prompt: "Staging deploy command"
+    default: null
+    required: true
+  - key: prod_deploy_command
+    prompt: "Production deploy command"
+    default: null
+    required: true
+  - key: staging_migration_command
+    prompt: "Staging migration command (empty to skip)"
+    default: null
+  - key: prod_migration_command
+    prompt: "Production migration command (empty to skip)"
+    default: null
+  - key: staging_health_command
+    prompt: "Staging health check command (empty to skip)"
+    default: null
+  - key: prod_health_command
+    prompt: "Production health check command (empty to skip)"
+    default: null
+  - key: full_clone
+    prompt: "Does deploy require full git history? (e.g. git push)"
+    type: boolean
+    default: false
+  - key: secrets_list
+    prompt: "GitHub secrets needed for deploy (comma-separated names, e.g. DEPLOY_KEY,API_TOKEN)"
+    default: null
+
+deploy:
+  staging:
+    command: "${staging_deploy_command}"
+  production:
+    command: "${prod_deploy_command}"
+    full_clone: "${full_clone}"
+
+migration:
+  staging:
+    command: "${staging_migration_command}"
+  production:
+    command: "${prod_migration_command}"
+
+health_check:
+  staging:
+    command: "${staging_health_command}"
+  production:
+    command: "${prod_health_command}"
+
+secrets: []
+# Populated dynamically from secrets_list prompt
+
+staging_agent_fallbacks:
+  deploy: "${staging_deploy_command}"
+  migrate: "${staging_migration_command}"
+  env_var: "Platform-specific — set manually"
