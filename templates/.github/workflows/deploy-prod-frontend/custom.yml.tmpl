@@ -1,0 +1,49 @@
+name: Deploy - Production Frontend
+
+# Auto-deploy the frontend after CI passes on the production branch.
+# Customize the build + deploy steps for your platform.
+
+on:
+  workflow_run:
+    workflows: ["Frontend Tests"]
+    types: [completed]
+    branches: [${__PROD_BRANCH}]
+
+concurrency:
+  group: deploy-prod-frontend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build + deploy frontend (production)
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${__NODE_VERSION_FILE}
+          cache: npm
+          cache-dependency-path: ${__FRONTEND_DIR}/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: ${__FRONTEND_DIR}
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests
+        working-directory: ${__FRONTEND_DIR}
+        run: ${__FRONTEND_TEST_CMD}
+
+      - name: Build
+        working-directory: ${__FRONTEND_DIR}
+        run: ${__FRONTEND_BUILD_CMD}
+
+      - name: Deploy
+        run: |
+          echo "TODO: Add your frontend deploy command here."
+          echo "Example: rsync -avz ${__FRONTEND_DIR}/dist/ user@server:/var/www/html/"
+          exit 1

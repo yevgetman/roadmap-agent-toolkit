@@ -1,0 +1,37 @@
+name: Staging Migrate
+
+# Run migrations on the staging backend after CI passes, or manually.
+# Customize the "Apply migrations" step for your platform.
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why this migration run is needed'
+        required: false
+        default: 'ad-hoc staging migration'
+
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__STAGING_BRANCH}]
+
+concurrency:
+  group: staging-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Run staging migrations
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply migrations
+        run: |
+          echo "TODO: Add your migration command here."
+          echo "Example: ssh staging-server '${__MIGRATION_CMD} --noinput'"
+          exit 1

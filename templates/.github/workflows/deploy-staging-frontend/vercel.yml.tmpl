@@ -1,0 +1,65 @@
+name: Frontend Deploy - Staging
+
+# Auto-deploy the frontend to Vercel (preview/staging) on every
+# push to the staging branch that touches frontend files.
+#
+# Required GitHub repo secrets:
+#   VERCEL_TOKEN      — Vercel personal access token
+#   VERCEL_ORG_ID     — your Vercel org/team ID
+#   VERCEL_PROJECT_ID — your Vercel project ID
+
+on:
+  push:
+    branches: [${__STAGING_BRANCH}]
+    paths:
+      - '${__FRONTEND_DIR}/**'
+      - '.github/workflows/deploy-staging-frontend.yml'
+
+concurrency:
+  group: frontend-deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Test + build + deploy to Vercel (staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${__NODE_VERSION_FILE}
+          cache: npm
+          cache-dependency-path: ${__FRONTEND_DIR}/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: ${__FRONTEND_DIR}
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests
+        working-directory: ${__FRONTEND_DIR}
+        run: ${__FRONTEND_TEST_CMD}
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel environment info
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy to Vercel (preview)
+        run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

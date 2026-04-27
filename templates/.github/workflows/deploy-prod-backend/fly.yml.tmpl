@@ -1,0 +1,49 @@
+name: Deploy - Production Backend
+
+# Auto-deploy the backend to Fly.io after CI passes on the production
+# branch. Only fires when backend files changed.
+#
+# Required GitHub repo secrets:
+#   FLY_API_TOKEN  — Fly.io deploy token
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__PROD_BRANCH}]
+
+concurrency:
+  group: deploy-prod-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to ${__BACKEND_APP_PROD}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify FLY_API_TOKEN is set
+        run: |
+          if [ -z "${FLY_API_TOKEN}" ]; then
+            echo "::error::FLY_API_TOKEN secret is not configured."
+            exit 1
+          fi
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --app ${__BACKEND_APP_PROD} --remote-only
+
+      - name: Run migrations
+        run: |
+          flyctl ssh console --app ${__BACKEND_APP_PROD} \
+            -C "${__MIGRATION_CMD} --noinput"
+
+      - name: Verify app is healthy
+        run: flyctl status --app ${__BACKEND_APP_PROD}

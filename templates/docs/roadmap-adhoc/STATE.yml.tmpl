@@ -1,0 +1,41 @@
+# STATE.yml — ad-hoc agent's working memory.
+#
+# The agent doesn't have a BACKLOG (it picks issues directly from
+# GitHub's open-issue list). This file records the in-flight state
+# for issues the agent has touched, so reconciliation across ticks
+# can find the merge SHA, branch name, and main_pr.
+#
+# Each entry maps to one open issue the agent has worked on. When
+# a main PR merges (item complete), the agent removes the entry.
+#
+# Fields per item:
+#   issue:              issue number on GitHub
+#   branch:             feature branch name (adhoc/<issue>)
+#   staging_merge_sha:  SHA of the merge commit on staging
+#   main_pr:            PR number against ${__PROD_BRANCH} (set after CI green)
+#   state:              in-progress | staged | blocked
+#   notes:              free-form
+#
+# State of the issue itself (analyzing -> not-actionable / needs-
+# clarification / proceeded) is reflected in GH issue LABELS, not
+# in this file.
+
+meta:
+  version: 1
+  owner: ${__REPO_OWNER}
+  locked: false                      # set true to pause the agent
+  scheduled_agent_routine_id: null
+  scheduled_agent_cron: null
+
+items: []
+
+# When the first issue is picked, the agent appends an entry like:
+#
+# items:
+#   - issue: 123
+#     branch: adhoc/123
+#     staging_merge_sha: abc1234567890
+#     main_pr: null
+#     state: in-progress
+#     notes: >
+#       Bug fix: null guard in some_view.

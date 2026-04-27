@@ -1,0 +1,163 @@
+# INFRA.yml — concrete infrastructure mapping for this repo.
+#
+# The companion WORKFLOWS.md describes the code-dev / CI workflow in
+# portable, vendor-neutral terms. This file maps those abstract
+# concepts (production backend, staging frontend, edge router, etc.)
+# to the specific hosts, platforms, CLIs, and URLs used here.
+#
+# When platform settings change (app rename, project rename, new
+# cron job, etc.), update this file.
+
+repository:
+  github_owner: ${__REPO_OWNER}
+  github_repo: ${__REPO_NAME}
+  primary_branch: ${__PROD_BRANCH}
+  integration_branch: ${__STAGING_BRANCH}
+
+# -----------------------------------------------------------------
+# Application tier — backends + frontends, per environment
+# -----------------------------------------------------------------
+
+environments:
+
+  production:
+    backend:
+      role: "production backend"
+      app_name: ${__BACKEND_APP_PROD}
+      # platform: Heroku | Fly | Railway | Render | custom
+      # url: https://...
+      # database:
+      #   engine: postgres | mysql
+      source_branch: ${__PROD_BRANCH}
+      deploy_mode: auto
+      deploy_gate:
+        type: "GH Action (deploy-prod-backend.yml) triggered by successful Tests workflow on ${__PROD_BRANCH}"
+        required_check: "Backend test suite"
+        absent_check_behavior: "no deploy fires (workflow_run trigger requires Tests to complete)"
+      deploy_commands:
+        auto: ".github/workflows/deploy-prod-backend.yml (Tests green on ${__PROD_BRANCH} -> deploy + migrate)"
+      notes: |
+        Auto-deploys via GH Action on every push to `${__PROD_BRANCH}` that
+        changes backend files (${__FRONTEND_DIR}/ and docs/ are excluded
+        by the Tests workflow's paths-ignore).
+
+    frontend:
+      role: "production frontend"
+      project_name: ${__FRONTEND_PROJECT_PROD}
+      # platform: Cloudflare Pages | Vercel | Netlify | custom
+      source_branch: ${__PROD_BRANCH}
+      deploy_mode: auto
+      deploy_gate:
+        type: "GH Action (deploy-prod-frontend.yml) triggered by successful Frontend Tests workflow on ${__PROD_BRANCH}"
+        required_check: "Frontend test suite"
+      build:
+        root_directory: ${__FRONTEND_DIR}
+        build_command: "${__FRONTEND_BUILD_CMD}"
+        # output_directory: dist
+        # toolchain_node: "20 (pinned via ${__NODE_VERSION_FILE})"
+      notes: |
+        Auto-deploys via GH Action on every push to `${__PROD_BRANCH}` that
+        changes files under ${__FRONTEND_DIR}/.
+
+  staging:
+    backend:
+      role: "staging backend"
+      app_name: ${__BACKEND_APP_STAGING}
+      # platform: same as production or different
+      source_branch: ${__STAGING_BRANCH}
+      deploy_mode: auto
+      deploy_gate:
+        type: "CI check must pass before deploy"
+        required_check: "Backend test suite"
+        absent_check_behavior: "gate hangs; use dashboard deploy to bypass"
+      notes: |
+        Auto-deploys on push to `${__STAGING_BRANCH}` gated on CI.
+
+    frontend:
+      role: "staging frontend"
+      project_name: ${__FRONTEND_PROJECT_STAGING}
+      # platform: same as production or different
+      source_branch: ${__STAGING_BRANCH}
+      deploy_mode: auto
+      notes: |
+        Auto-deploys via GH Action on push to `${__STAGING_BRANCH}` that
+        touches ${__FRONTEND_DIR}/.
+
+# -----------------------------------------------------------------
+# CI
+# -----------------------------------------------------------------
+
+ci:
+  platform: GitHub Actions
+  workflows:
+
+    backend-tests:
+      file: .github/workflows/tests.yml
+      name: "Tests"
+      scope: "Backend test suite"
+      runner: ubuntu-latest
+      triggers:
+        push: [${__PROD_BRANCH}, ${__STAGING_BRANCH}]
+        pull_request: [${__PROD_BRANCH}, ${__STAGING_BRANCH}]
+      paths_ignore:
+        - "**.md"
+        - "docs/**"
+        - "${__FRONTEND_DIR}/**"
+        - ".gitignore"
+      gates:
+        - "Backend deploy (required_check)"
+
+    frontend-tests:
+      file: .github/workflows/frontend-tests.yml
+      name: "Frontend Tests"
+      scope: "Frontend test suite"
+      runner: ubuntu-latest
+      triggers:
+        push: [${__PROD_BRANCH}, ${__STAGING_BRANCH}]
+        pull_request: [${__PROD_BRANCH}, ${__STAGING_BRANCH}]
+      paths:
+        - "${__FRONTEND_DIR}/**"
+        - ".github/workflows/frontend-tests.yml"
+
+    staging-migrate:
+      file: .github/workflows/staging-migrate.yml
+      name: "Staging Migrate"
+      scope: "Run migrations on staging backend"
+      runner: ubuntu-latest
+      triggers:
+        workflow_run: ["Tests", completed, ${__STAGING_BRANCH}]
+        workflow_dispatch: true
+
+    deploy-prod-backend:
+      file: .github/workflows/deploy-prod-backend.yml
+      name: "Deploy - Production Backend"
+      scope: "Deploy backend to production + run migrations"
+      runner: ubuntu-latest
+      triggers:
+        workflow_run: ["Tests", completed, ${__PROD_BRANCH}]
+
+    deploy-prod-frontend:
+      file: .github/workflows/deploy-prod-frontend.yml
+      name: "Deploy - Production Frontend"
+      scope: "Build + deploy frontend to production"
+      runner: ubuntu-latest
+      triggers:
+        workflow_run: ["Frontend Tests", completed, ${__PROD_BRANCH}]
+
+  absent_check_examples:
+    - trigger: "docs-only commit"
+      effect: "neither Tests nor Frontend Tests runs; no deploy fires"
+    - trigger: "frontend-only commit"
+      effect: "Tests workflow skipped; only Frontend Tests runs"
+    - trigger: "backend-only commit"
+      effect: "Frontend Tests skipped; only Tests runs"
+
+# -----------------------------------------------------------------
+# Testing — local commands
+# -----------------------------------------------------------------
+
+testing:
+  backend:
+    local_command: "${__BACKEND_TEST_CMD}"
+  frontend:
+    local_command: "${__FRONTEND_TEST_CMD}"

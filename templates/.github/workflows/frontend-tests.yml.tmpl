@@ -1,0 +1,45 @@
+name: Frontend Tests
+
+on:
+  push:
+    branches: [${__PROD_BRANCH}, ${__STAGING_BRANCH}]
+    paths:
+      - '${__FRONTEND_DIR}/**'
+      - '.github/workflows/frontend-tests.yml'
+  pull_request:
+    branches: [${__PROD_BRANCH}, ${__STAGING_BRANCH}]
+    paths:
+      - '${__FRONTEND_DIR}/**'
+      - '.github/workflows/frontend-tests.yml'
+
+concurrency:
+  group: frontend-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Frontend test suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ${__FRONTEND_DIR}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${__NODE_VERSION_FILE}
+          cache: npm
+          cache-dependency-path: ${__FRONTEND_DIR}/package-lock.json
+
+      - name: Install npm dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests
+        run: ${__FRONTEND_TEST_CMD}
+
+      - name: Build
+        run: ${__FRONTEND_BUILD_CMD}

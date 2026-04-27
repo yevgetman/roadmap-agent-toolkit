@@ -1,0 +1,33 @@
+# BACKLOG.yml — unified, multi-track work queue.
+#
+# This file is the SINGLE SOURCE OF TRUTH for all roadmap item status.
+# Each track has its own meta (kill-switch, north_star, agent config)
+# and its own ordered item list. The agent receives a TRACK parameter
+# and operates on exactly one track per tick.
+#
+# Ordering within a track reflects intended execution order. The agent
+# picks the first item with status == ready whose deps (within the
+# same track) are all done/staged.
+#
+# Fields per item:
+#   id:                unique item id (matches items/<id>-*.md)
+#   title:             short human label
+#   epic:              parent epic id (optional grouping)
+#   status:            ready | in-progress | staged | blocked | done | deferred
+#   deps:              list of item ids (same track) that must be done/staged first
+#   spec:              relative path to item spec
+#   issue:             GH issue number (agent fills this in)
+#   branch:            branch name (agent fills this in)
+#   staging_merge_sha: merge commit on staging (agent fills this in)
+#   main_pr:           PR number against production branch (agent fills this in)
+#   notes:             optional free-form note (esp. for blocked/deferred)
+#
+# Adding a new track: add a key under `tracks:` with its own `meta:`
+# and `items:` sections. Pick a unique id prefix, branch prefix, and
+# issue label. Schedule an agent with TRACK set to the new key.
+
+version: 2
+
+tracks:
+
+# __TRACKS_PLACEHOLDER__

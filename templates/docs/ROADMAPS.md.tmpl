@@ -1,0 +1,69 @@
+# Roadmaps
+
+This repo runs scheduled agents that autonomously implement work
+items from a structured backlog against a staging environment.
+
+## The unified roadmap
+
+### [`docs/roadmap/`](./roadmap/)
+
+All roadmap-tracked work lives in a single directory with a unified
+`BACKLOG.yml` (version 2 schema). The backlog contains multiple
+**tracks**, each with its own meta, items, and scheduled agent.
+
+**Where to look:**
+- [`docs/roadmap/README.md`](./roadmap/README.md) -- orientation + conventions
+- [`docs/roadmap/BACKLOG.yml`](./roadmap/BACKLOG.yml) -- the unified queue
+- [`docs/roadmap/AGENT_PROMPT.md`](./roadmap/AGENT_PROMPT.md) -- runtime
+  contract for all roadmap agents (parameterized by `TRACK`)
+- [`docs/roadmap/AUTOMATION.md`](./roadmap/AUTOMATION.md) -- design,
+  permissions model, recovery procedures
+- [`docs/roadmap/epics/`](./roadmap/epics/) -- epic-level specs
+- [`docs/roadmap/items/`](./roadmap/items/) -- per-item specs
+
+### [`docs/roadmap-adhoc/`](./roadmap-adhoc/) -- Ad-hoc issues
+
+**Goal:** pick up GitHub issues from collaborators that aren't
+part of any roadmap. Bug reports, small feature requests,
+miscellaneous fixes -- work that doesn't justify a backlog entry.
+
+**How it picks issues:** queries GitHub for the **oldest open
+issue** that lacks any roadmap or ad-hoc label. The issue body
+itself is the spec -- the agent analyzes it for coherence,
+solvability, and clarity before implementing.
+
+**Where to look:**
+- [`docs/roadmap-adhoc/README.md`](./roadmap-adhoc/README.md) -- full description + state machine
+- [`docs/roadmap-adhoc/STATE.yml`](./roadmap-adhoc/STATE.yml) -- in-flight items only
+- [`docs/roadmap-adhoc/AGENT_PROMPT.md`](./roadmap-adhoc/AGENT_PROMPT.md) -- runtime contract
+
+## How agents coexist
+
+Same code base, same staging env, separate everything else:
+
+- Each track agent operates on its own section of `BACKLOG.yml`
+- The ad-hoc agent operates on GitHub issues + `STATE.yml`
+- One in-progress item per agent at any time
+- All agents share CI workflows and staging deploy infrastructure
+- No cross-track item dependencies
+
+## Kill switches
+
+To pause agent work without touching schedules:
+
+- Pause a roadmap track: set `tracks.<name>.meta.locked: true` in
+  `docs/roadmap/BACKLOG.yml`, commit + push to `${__PROD_BRANCH}`.
+- Pause the ad-hoc agent: set `meta.locked: true` in
+  `docs/roadmap-adhoc/STATE.yml`.
+
+Each agent reads its kill switch first thing on every tick and exits
+cleanly if true.
+
+## Adding a new track
+
+1. Add a key under `tracks:` in `docs/roadmap/BACKLOG.yml` with
+   its own `meta:` and `items:` sections.
+2. Pick a unique ID prefix, branch prefix, and issue label.
+3. Create the issue label in GitHub.
+4. Schedule an agent with `TRACK` set to the new key.
+5. Update this file with the new track's entry.

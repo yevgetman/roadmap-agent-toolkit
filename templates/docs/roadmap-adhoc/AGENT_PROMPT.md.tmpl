@@ -1,0 +1,113 @@
+# AGENT_PROMPT — ad-hoc issue agent runtime contract
+
+Near-clone of [`docs/roadmap/AGENT_PROMPT.md`](../roadmap/AGENT_PROMPT.md)
+with substitutions for the ad-hoc flow. Read the roadmap prompt
+first -- same hard rules, same direct-merge-to-staging procedure,
+same prod off-limits posture. This file documents the deltas only.
+
+## Substitutions vs the roadmap agent prompt
+
+| Wherever the roadmap prompt says... | Use this in the ad-hoc agent |
+|---|---|
+| `docs/roadmap/BACKLOG.yml` | `docs/roadmap-adhoc/STATE.yml` (different schema) |
+| `BACKLOG items` | `GH issues + STATE.yml entries` |
+| `<branch_prefix>/<item.id>` (branch name) | `adhoc/<issue-number>` |
+| `<item.id>` in commit messages | `adhoc(#<N>)` |
+| `<issue_label>` (PR/issue label) | `adhoc:in-progress` / `adhoc:staged` / etc. |
+| commit msg `<prefix>(<item.id>): ...` | `adhoc(#<N>): ...` |
+
+## Picker (REPLACES Step 4 of the roadmap prompt)
+
+Query GitHub for open issues not part of any roadmap:
+
+```
+gh issue list --repo ${__REPO_OWNER}/${__REPO_NAME} --state open \
+  --limit 50 \
+  --search "is:issue is:open -label:roadmap-* -label:adhoc:in-progress -label:adhoc:staged -label:adhoc:blocked -label:adhoc:needs-clarification -label:adhoc:not-actionable" \
+  --json number,title,createdAt,body,author --jq 'sort_by(.createdAt) | .[0]'
+```
+
+Take the OLDEST matching issue. If none: exit cleanly.
+
+## Step 4.6 — Analyze the issue before implementing
+
+After picking an issue but BEFORE creating a feature branch, judge:
+
+1. **Coherence** -- is this a real problem or request?
+2. **Solvability** -- can it be fixed with reasonable confidence?
+3. **Sufficient detail** -- enough info to know what "done" looks like?
+
+### Outcomes
+
+- **Pass** all three -> proceed to implementation.
+
+- **Not actionable** (gibberish, spam, off-topic, duplicate):
+  ```
+  gh issue comment <N> --body "Closing review: this issue isn't actionable. <reason>."
+  gh issue edit <N> --add-label adhoc:not-actionable
+  ```
+  Exit.
+
+- **Needs clarification**:
+  ```
+  gh issue comment <N> --body "Need more detail: <questions>. Remove the label when clarified."
+  gh issue edit <N> --add-label adhoc:needs-clarification
+  ```
+  Exit.
+
+- **Out of scope** (should be a roadmap item):
+  ```
+  gh issue comment <N> --body "This is a substantive change worth a roadmap item."
+  gh issue edit <N> --add-label adhoc:not-actionable
+  ```
+  Exit.
+
+## Implement (Step 5)
+
+1. `git checkout -b adhoc/<N> origin/${__PROD_BRANCH}`.
+2. Use the GH issue body + comments as the spec.
+3. Write code + tests.
+4. Run local tests: `${__BACKEND_TEST_CMD}`
+   (and `${__FRONTEND_TEST_CMD}` if the change touches
+   `${__FRONTEND_DIR}/`).
+5. If tests fail after 3 attempts: label `adhoc:blocked`, exit.
+6. Commit + push.
+
+## Merge to staging (Step 6)
+
+```
+git fetch origin ${__STAGING_BRANCH}
+git checkout ${__STAGING_BRANCH}
+git pull --ff-only origin ${__STAGING_BRANCH}
+git merge --no-ff adhoc/<N> -m "Merge adhoc/<N> into ${__STAGING_BRANCH}: <issue title> (refs #<N>)"
+git push origin ${__STAGING_BRANCH}
+```
+
+Comment on issue + label `adhoc:in-progress`.
+
+## Update STATE.yml (Step 7)
+
+Add entry, commit + push to `${__PROD_BRANCH}`.
+
+## Reconcile in-progress (Step 3 equivalent)
+
+For each item in STATE.yml with `state: in-progress`:
+- Check CI on `staging_merge_sha`.
+- **GREEN**: Open main PR with `--label adhoc:staged`. Swap labels.
+  Update STATE.yml.
+- **RED**: Revert staging merge. Label `adhoc:blocked`.
+- **PENDING**: skip.
+
+## Promote staged -> done (Step 2 equivalent)
+
+For each item with `state: staged`:
+- Check if main PR merged.
+- **MERGED**: verify issue closed, delete branch, remove STATE entry.
+- **OPEN**: skip.
+- **CLOSED without merge**: set `blocked`.
+
+## Hard rules — identical to roadmap agent
+
+All hard rules from `docs/roadmap/AGENT_PROMPT.md` apply:
+prod off-limits, no force-push to shared refs, no secrets, no
+skipping hooks, etc.

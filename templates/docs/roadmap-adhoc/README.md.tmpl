@@ -1,0 +1,84 @@
+# Ad-hoc issue agent
+
+A scheduled agent that picks up GitHub issues from collaborators
+that aren't part of an established roadmap. Bug reports, small
+feature requests, etc. -- work that doesn't justify a roadmap entry.
+
+## How it differs from the roadmap agents
+
+| | Roadmap agents | Ad-hoc agent |
+|---|---|---|
+| **Source of truth** | `BACKLOG.yml` | GitHub issues + `STATE.yml` |
+| **Picker** | Order in BACKLOG | **Oldest open issue** without roadmap or adhoc labels |
+| **Spec** | `items/*.md` file | The GitHub issue body itself |
+| **Branch** | `<prefix>/<item-id>` | `adhoc/<issue-number>` |
+| **Issue label** | Per-track label | `adhoc:in-progress` / `adhoc:staged` / etc. |
+| **Maximum new work / tick** | 1 item | 1 issue |
+
+## Layout
+
+```
+docs/roadmap-adhoc/
++-- README.md         <-- you are here
++-- STATE.yml         <-- agent's working memory
++-- AGENT_PROMPT.md   <-- runtime contract (deltas vs roadmap prompt)
+```
+
+## What the agent considers "ad-hoc"
+
+An open issue qualifies if:
+- `state == OPEN`, AND
+- Does NOT have any roadmap label, AND
+- Does NOT have any `adhoc:*` label
+
+## State machine
+
+```
+(no label)
+   |
+   |  agent picks
+   v
+analyzes for coherence
+   |
+   +-->  adhoc:not-actionable      (not a bug or feature; exit)
+   |
+   +-->  adhoc:needs-clarification (agent posts questions; exit)
+   |
+   +--> implements + merges to staging
+          |
+          v
+        adhoc:in-progress  (staging-merged, CI running)
+          |
+          |  CI green
+          v
+        adhoc:staged       (main PR opened, awaiting human merge)
+          |
+          |  human merges main PR
+          v
+        (issue auto-closed, STATE.yml entry removed, branch deleted)
+```
+
+## Failure modes
+
+- **CI fails** -> agent reverts staging merge, labels `adhoc:blocked`.
+- **Agent can't understand the issue** -> labels `adhoc:needs-clarification`.
+- **Issue is gibberish** -> labels `adhoc:not-actionable`.
+
+## Coexistence with roadmap agents
+
+- All agents share the same staging environment + CI workflows.
+- One in-progress item per agent (label-scoped).
+- Agents commit state updates to `${__PROD_BRANCH}` for different
+  files, no merge conflicts.
+
+## Hard rules (same as roadmap agents)
+
+- Never push to `${__PROD_BRANCH}` except for doc-only STATE.yml updates.
+- Never push to prod.
+- Never force-push to shared branches. Use `git revert -m 1`.
+- Never commit secrets.
+
+## Kill switch
+
+Set `meta.locked: true` in `STATE.yml`, commit + push to
+`${__PROD_BRANCH}`. Next tick exits cleanly.

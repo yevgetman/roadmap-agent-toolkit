@@ -1,0 +1,170 @@
+# AUTOMATION — scheduled agent that drives the roadmap
+
+This doc describes the automated system that iteratively executes
+`BACKLOG.yml`. Read `README.md` first for the surrounding structure.
+
+## TL;DR
+
+A **scheduled remote LLM agent** ticks on a fixed cadence for each
+track in `BACKLOG.yml`. On each tick it does one of these, exactly one:
+
+1. **Promote** a `staged` item to `done` if the feature branch has
+   also been merged into `${__PROD_BRANCH}` (by a human).
+2. **Reconcile** the single in-progress item -- check CI on the
+   recorded `staging_merge_sha`. If green, mark `staged`. If red,
+   revert the staging merge + mark `blocked`. If pending, wait.
+3. **Advance** to the next `ready` item whose deps are
+   `done`/`staged` -- create a feature branch off `${__PROD_BRANCH}`,
+   implement, push the branch, then merge it locally into
+   `${__STAGING_BRANCH}` and push staging directly. No PR against
+   staging.
+
+One work item at a time per track. The agent never has more than one
+`ready`-or-`in-progress`-transitioning item per tick.
+
+## Target branch: staging, not ${__PROD_BRANCH}
+
+The agent merges directly into `${__STAGING_BRANCH}`. The staging
+backend auto-deploys from pushes to `${__STAGING_BRANCH}` (per
+`INFRA.yml`); deploy workflows auto-deploy the staging frontend on
+the same trigger.
+
+```
+agent branch (<prefix>/<item-id>)
+    +-- commit + push (branch lives on origin for human review)
+    +-- locally merge --no-ff into ${__STAGING_BRANCH}
+        +-- push ${__STAGING_BRANCH}
+            +-- staging backend auto-deploys (push trigger)
+            +-- staging frontend auto-deploys (push trigger)
+            +-- CI runs (Tests + Frontend Tests)
+                +-- agent waits inline (same tick):
+                    +-- green -> flip BACKLOG to staged
+                    |            + open main PR
+                    +-- red   -> revert merge on staging
+                                 + flip BACKLOG to blocked
+```
+
+The feature branch stays around after staging merge. Landing on
+`${__PROD_BRANCH}` -- and thus prod -- is a human decision. You
+merge the same feature branch into `${__PROD_BRANCH}` when you're
+satisfied with what you see on staging. The agent will detect that
+merge on its next tick and flip the item's status to `done`.
+
+## Relationship to CLAUDE.md
+
+The `CLAUDE.md` rule "No forced merges to ${__PROD_BRANCH} without
+approval" is fully preserved -- the agent never touches
+`${__PROD_BRANCH}` except for BACKLOG.yml status updates.
+
+## Permissions model
+
+### What the agent CAN do (staging is unlocked)
+
+- Merge feature branches directly into `${__STAGING_BRANCH}` and push.
+- Deploy to staging as a fallback when platform auto-deploy doesn't fire.
+- Run staging migrations.
+- Set staging env vars as an item legitimately requires.
+
+### What the agent CANNOT do (prod is locked)
+
+- Push to any production remote or deploy target.
+- Run production migrations or set prod env vars.
+- Force-push to `origin/${__PROD_BRANCH}` or
+  `origin/${__STAGING_BRANCH}`.
+- Touch external dashboards that aren't already wired.
+
+### Guard-rails (always on)
+
+1. **`${__PROD_BRANCH}` is read-only except for BACKLOG.yml status
+   updates.** Doc-only commits, path-ignored by CI.
+2. **No secrets in commits.**
+3. **CI must be green before marking staged.**
+4. **Kill switch.** `meta.locked: true` in BACKLOG.yml.
+5. **Per-item retry cap.** Two CI failures -> item blocked.
+6. **One item at a time per track.**
+7. **No roadmap mutation without commit.**
+8. **No skipped hooks.**
+
+## Picker algorithm
+
+Each tick, the agent runs:
+
+```
+0. git fetch origin
+   git checkout ${__PROD_BRANCH} && git pull --ff-only
+   Read docs/roadmap/BACKLOG.yml.
+
+1. If meta.locked: exit 0 ("locked").
+
+2. Promote staged -> done (for items where main PR was merged).
+
+3. Reconcile in-progress (check CI on staging_merge_sha).
+
+4. Advance (pick next ready item, implement, merge to staging).
+
+5. Wait for CI inline (~5-12 min cap).
+   Green -> open main PR, mark staged.
+   Red -> revert, mark blocked.
+
+6. Exit 0.
+```
+
+## Dep semantics: `staged` counts as satisfied
+
+A `ready` item whose deps are all `staged` (not yet `done`) is
+eligible. Rationale: waiting for human main-merge before the next
+dependent item can even start is too slow.
+
+If you want strict "main-merge-only" dep satisfaction, set
+`DEPS_REQUIRE_DONE: true` in the agent prompt config.
+
+## Cadence
+
+**Recommended default: every 6 hours.** Offset each track's agent
+by 1 hour so no two fire simultaneously.
+
+| Cadence | Fit |
+|---|---|
+| Hourly | Fast iteration; heavy API cost |
+| Every 6h | Default. 4 ticks/day. |
+| Daily | Low-noise steady-state |
+| Every 30m | Near-realtime (for active watching) |
+
+## Config knobs
+
+In `AGENT_PROMPT.md`:
+
+| Name | Default | Purpose |
+|---|---|---|
+| `TARGET_BRANCH` | `${__STAGING_BRANCH}` | The merge target. |
+| `MAX_ITEM_RETRIES` | `2` | CI failures before item is blocked. |
+| `DEPS_REQUIRE_DONE` | `false` | `true` = deps must be done (not just staged). |
+| `ONE_AT_A_TIME_STRICT` | `false` | `true` = refuse new items while any is staged. |
+| `REVERT_ON_CI_FAILURE` | `true` | `false` = leave broken code on staging. |
+
+## Observability
+
+- Agent run history via your scheduling platform's UI.
+- `BACKLOG.yml` commit history on `${__PROD_BRANCH}` is the audit
+  trail (`git log -- docs/roadmap/BACKLOG.yml`).
+- Failed items carry the failure reason in `notes:`.
+- Issues and PRs are labeled per-track for filtering.
+
+## Recovering from trouble
+
+1. **Pause it.** `meta.locked: true` in BACKLOG.yml, commit +
+   push to `${__PROD_BRANCH}`. Next tick exits.
+2. **Hard stop.** Delete the scheduled routine/cron.
+3. **Fix state.**
+   - Broken branch: delete it, set item status back to `ready`
+     (or `blocked`), commit + push.
+   - Bad staging merge: revert with `git revert -m 1 <sha>` on
+     `${__STAGING_BRANCH}`, flip item to `blocked`.
+4. **Resume.** `meta.locked: false`, push.
+
+## What the agent does NOT do
+
+- Add/reorder/delete items in BACKLOG.yml -- planning is human.
+- Deploy to production.
+- Merge feature branches into `${__PROD_BRANCH}`.
+- Respond to PR review comments.

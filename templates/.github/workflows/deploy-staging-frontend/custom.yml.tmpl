@@ -1,0 +1,49 @@
+name: Frontend Deploy - Staging
+
+# Auto-deploy the frontend to staging on every push to the staging
+# branch that touches frontend files. Customize for your platform.
+
+on:
+  push:
+    branches: [${__STAGING_BRANCH}]
+    paths:
+      - '${__FRONTEND_DIR}/**'
+      - '.github/workflows/deploy-staging-frontend.yml'
+
+concurrency:
+  group: frontend-deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Test + build + deploy frontend (staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${__NODE_VERSION_FILE}
+          cache: npm
+          cache-dependency-path: ${__FRONTEND_DIR}/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: ${__FRONTEND_DIR}
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests
+        working-directory: ${__FRONTEND_DIR}
+        run: ${__FRONTEND_TEST_CMD}
+
+      - name: Build
+        working-directory: ${__FRONTEND_DIR}
+        run: ${__FRONTEND_BUILD_CMD}
+
+      - name: Deploy
+        run: |
+          echo "TODO: Add your staging frontend deploy command here."
+          echo "Example: rsync -avz ${__FRONTEND_DIR}/dist/ user@staging:/var/www/html/"
+          exit 1

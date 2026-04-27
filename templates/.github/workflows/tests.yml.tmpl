@@ -1,0 +1,42 @@
+name: Tests
+
+on:
+  push:
+    branches: [${__PROD_BRANCH}, ${__STAGING_BRANCH}]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '${__FRONTEND_DIR}/**'
+      - '.gitignore'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+  pull_request:
+    branches: [${__PROD_BRANCH}, ${__STAGING_BRANCH}]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '${__FRONTEND_DIR}/**'
+      - '.gitignore'
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Backend test suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+# __SERVICES_PLACEHOLDER__
+
+    env:
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+# __BACKEND_SETUP_PLACEHOLDER__
+
+      - name: Run test suite
+        run: ${__BACKEND_TEST_CMD}

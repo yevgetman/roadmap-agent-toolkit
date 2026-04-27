@@ -1,0 +1,61 @@
+name: Staging Migrate
+
+# Run migrations on the staging backend after CI passes, or manually.
+#
+# Required GitHub repo secrets:
+#   HEROKU_API_KEY  — full Heroku account API key
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why this migration run is needed'
+        required: false
+        default: 'ad-hoc staging migration'
+
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__STAGING_BRANCH}]
+
+concurrency:
+  group: staging-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: heroku run migrate (${__BACKEND_APP_STAGING})
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+
+    steps:
+      - name: Verify HEROKU_API_KEY is set
+        run: |
+          if [ -z "${HEROKU_API_KEY}" ]; then
+            echo "::error::HEROKU_API_KEY secret is not configured."
+            exit 1
+          fi
+          echo "Reason: ${{ inputs.reason }}"
+
+      - name: Install Heroku CLI
+        run: curl https://cli-assets.heroku.com/install.sh | sh
+
+      - name: Show pre-migration state
+        run: |
+          heroku run --no-tty --exit-code -a ${__BACKEND_APP_STAGING} \
+            -- ${__MIGRATION_CMD} showmigrations 2>&1 | tail -25
+        continue-on-error: true
+
+      - name: Apply migrations
+        run: |
+          heroku run --no-tty --exit-code -a ${__BACKEND_APP_STAGING} \
+            -- ${__MIGRATION_CMD} --noinput
+
+      - name: Show post-migration state
+        run: |
+          heroku run --no-tty --exit-code -a ${__BACKEND_APP_STAGING} \
+            -- ${__MIGRATION_CMD} showmigrations 2>&1 | tail -25
+        continue-on-error: true

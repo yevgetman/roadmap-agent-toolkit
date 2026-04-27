@@ -1,0 +1,74 @@
+name: Deploy - Production Backend
+
+# Auto-deploy the backend to Heroku after CI passes on the production
+# branch. Only fires when backend files changed.
+#
+# Required GitHub repo secrets:
+#   HEROKU_API_KEY  — full Heroku account API key
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__PROD_BRANCH}]
+
+concurrency:
+  group: deploy-prod-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to ${__BACKEND_APP_PROD}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify HEROKU_API_KEY is set
+        run: |
+          if [ -z "${HEROKU_API_KEY}" ]; then
+            echo "::error::HEROKU_API_KEY secret is not configured."
+            exit 1
+          fi
+
+      - name: Install Heroku CLI
+        run: curl https://cli-assets.heroku.com/install.sh | sh
+
+      - name: Deploy to Heroku
+        run: |
+          git remote add heroku https://heroku:${HEROKU_API_KEY}@git.heroku.com/${__BACKEND_APP_PROD}.git
+          git push heroku ${__PROD_BRANCH}:main --force
+
+      - name: Wait for release to complete
+        run: |
+          echo "Waiting for Heroku release..."
+          for i in {1..30}; do
+            STATUS=$(heroku releases -a ${__BACKEND_APP_PROD} --num 1 --json | python3 -c "import sys,json; print(json.load(sys.stdin)[0].get('status','pending'))" 2>/dev/null || echo "pending")
+            echo "Release status: $STATUS (attempt $i)"
+            if [ "$STATUS" = "succeeded" ]; then
+              echo "Release succeeded"
+              exit 0
+            elif [ "$STATUS" = "failed" ]; then
+              echo "::error::Heroku release failed"
+              heroku releases -a ${__BACKEND_APP_PROD} --num 3
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "::warning::Release status check timed out — proceeding to migration"
+
+      - name: Apply migrations
+        run: |
+          heroku run --no-tty --exit-code -a ${__BACKEND_APP_PROD} \
+            -- ${__MIGRATION_CMD} --noinput
+
+      - name: Verify app is healthy
+        run: |
+          heroku ps -a ${__BACKEND_APP_PROD}
+          heroku releases -a ${__BACKEND_APP_PROD} --num 3

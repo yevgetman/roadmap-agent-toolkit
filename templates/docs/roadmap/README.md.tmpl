@@ -1,0 +1,67 @@
+# Roadmap
+
+This directory is the **source of truth** for all roadmap-tracked work.
+It contains multiple **tracks** in a single unified backlog. It is
+structured to be read by both humans and the scheduled automation
+agents (see [`AUTOMATION.md`](./AUTOMATION.md)).
+
+> **Ad-hoc issues** (collaborator bug reports not on any roadmap) are
+> handled separately by the ad-hoc agent -- see
+> [`docs/roadmap-adhoc/`](../roadmap-adhoc/).
+
+## Layout
+
+```
+docs/roadmap/
++-- README.md               <-- you are here
++-- AUTOMATION.md           <-- how the scheduled agents work
++-- BACKLOG.yml             <-- unified, multi-track work queue (version 2)
++-- AGENT_PROMPT.md         <-- runtime contract for all roadmap agents
++-- epics/                  <-- epic-level specs
++-- items/                  <-- per-item specs (one file per BACKLOG.yml entry)
+```
+
+## How to use this
+
+### Reading order (new contributor / fresh agent)
+
+1. This file (scope + conventions).
+2. `AUTOMATION.md` (how items move, when, under whose authority).
+3. `BACKLOG.yml` (what's next -- pick your track).
+4. The relevant `epics/*.md` for context on *why*.
+5. The specific `items/<id>-*.md` for *what to build*.
+
+### Conventions
+
+- **Epics** are stable containers for a theme. They rarely change.
+- **Items** are concrete, shippable units -- each item is one merge.
+  Items are the thing the agent picks up.
+- **Status** lives in `BACKLOG.yml`, never in per-item files.
+- **Dependencies** are explicit and within the same track. The agent
+  will only pick up an item whose deps are all `done` or `staged`.
+- **No cross-track deps.** If items across tracks depend on each
+  other, restructure.
+- **Acceptance criteria** are checklists inside each item file. An
+  item is `done` only when every box is checked AND the branch is
+  merged to `${__PROD_BRANCH}`.
+
+### Status values (in `BACKLOG.yml`)
+
+| Status | Meaning |
+|---|---|
+| `ready` | In the backlog. Agent picks it up when deps are satisfied. |
+| `in-progress` | Feature branch merged to staging, CI running. |
+| `staged` | CI green on staging. Main PR opened. Awaiting human review + merge. |
+| `done` | PR merged to `${__PROD_BRANCH}`, production deploy verified, issue closed. |
+| `blocked` | Unmet deps OR a failure the agent couldn't fix. Agent skips. |
+| `deferred` | Explicitly shelved. Agent skips. |
+
+State transitions the agent performs: `ready -> in-progress -> staged`.
+The `staged -> done` transition happens when a **human** merges the
+PR into `${__PROD_BRANCH}`, triggering the auto-deploy pipeline.
+
+## Relationship to `${__PROD_BRANCH}` and prod
+
+The agent **does not touch `${__PROD_BRANCH}`** except for BACKLOG.yml
+status updates. Its merge target is `${__STAGING_BRANCH}`. A feature
+branch only lands on `${__PROD_BRANCH}` when you merge it yourself.

@@ -1,0 +1,44 @@
+name: Deploy - Production Backend
+
+# Auto-deploy the backend after CI passes on the production branch.
+# Customize the deploy + migration steps for your platform.
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [${__PROD_BRANCH}]
+
+concurrency:
+  group: deploy-prod-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy production backend
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Deploy
+        run: |
+          echo "TODO: Add your deploy command here."
+          echo "Example: ssh prod-server 'cd /app && git pull && systemctl restart app'"
+          exit 1
+
+      - name: Run migrations
+        run: |
+          echo "TODO: Add your migration command here."
+          echo "Example: ssh prod-server 'cd /app && ${__MIGRATION_CMD} --noinput'"
+          exit 1
+
+      - name: Verify health
+        run: |
+          echo "TODO: Add your health check here."
+          echo "Example: curl -f https://your-app.com/health"
+          exit 1
