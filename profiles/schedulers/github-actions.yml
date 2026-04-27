@@ -1,0 +1,57 @@
+# GitHub Actions cron scheduler profile
+#
+# Generates a workflow file that runs the agent CLI on a schedule.
+# Runs in GitHub's cloud — no local machine needed. Requires the
+# agent CLI to be installable in the runner environment.
+
+name: GitHub Actions Cron
+slug: github-actions
+platform: any
+
+# Generated workflow (one per track)
+workflow_template: |
+  name: Agent — ${track_name}
+
+  on:
+    schedule:
+      - cron: '${cron_expression}'
+    workflow_dispatch:
+      inputs:
+        reason:
+          description: 'Manual trigger reason'
+          required: false
+
+  jobs:
+    tick:
+      name: ${track_name} agent tick
+      runs-on: ubuntu-latest
+      timeout-minutes: 30
+
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+            token: $${{ secrets.AGENT_PAT }}
+
+        - name: Configure git
+          run: |
+            git config user.name "roadmap-agent"
+            git config user.email "noreply@roadmap-agent"
+
+        - name: Install agent CLI
+          run: ${agent_install_command}
+
+        - name: Run tick
+          env:
+            GITHUB_TOKEN: $${{ secrets.AGENT_PAT }}
+          run: |
+            ${agent_invoke_command}
+
+workflow_file: ".github/workflows/agent-${track_name}.yml"
+
+secrets:
+  - name: AGENT_PAT
+    description: "GitHub Personal Access Token with repo write access (for pushing branches + BACKLOG updates)"
+    how_to_get: "GitHub → Settings → Developer settings → Personal access tokens → Fine-grained → Create"
+
+status_command: "gh run list --workflow agent-${track_name}.yml --limit 5"

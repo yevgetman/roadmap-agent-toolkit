@@ -1,0 +1,43 @@
+# macOS launchd scheduler profile
+#
+# Generates plist files in ~/Library/LaunchAgents/ for each track.
+# Runs even when the user is logged in but the terminal is closed.
+
+name: launchd (macOS)
+slug: launchd
+platform: darwin
+
+plist_dir: "~/Library/LaunchAgents"
+
+# Generated plist template (one per track)
+plist_template: |
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.roadmap-agent.${track_name}</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>${repo_root}/.roadmap/agents/tick-${track_name}.sh</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>${cadence_seconds}</integer>
+    <key>WorkingDirectory</key>
+    <string>${repo_root}</string>
+    <key>StandardOutPath</key>
+    <string>${repo_root}/.roadmap/logs/${track_name}.log</string>
+    <key>StandardErrorPath</key>
+    <string>${repo_root}/.roadmap/logs/${track_name}.err</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key>
+      <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+  </dict>
+  </plist>
+
+load_command: "launchctl load ~/Library/LaunchAgents/com.roadmap-agent.${track_name}.plist"
+unload_command: "launchctl unload ~/Library/LaunchAgents/com.roadmap-agent.${track_name}.plist"
+status_command: "launchctl list | grep roadmap-agent"

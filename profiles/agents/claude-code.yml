@@ -1,0 +1,42 @@
+# Claude Code agent runtime profile
+#
+# Default. Uses Anthropic's scheduled routines — no separate
+# scheduler needed. Requires `claude` CLI installed + authenticated.
+
+name: Claude Code
+slug: claude-code
+
+scheduler: built-in              # routines are managed inside Claude Code
+requires_cli: claude
+auth_check: "claude --version"
+auth_fail_message: |
+  Claude Code CLI not found or not authenticated.
+  Install: https://docs.anthropic.com/en/docs/claude-code
+  Then run: claude login
+
+default_model: claude-sonnet-4-6
+
+setup_method: manual
+setup_instructions: |
+  For each track, run this in a Claude Code session inside the repo:
+    /schedule create
+  Set:
+    - Cron: ${cron_expression}
+    - Model: claude-sonnet-4-6
+    - Prompt: contents of docs/roadmap/AGENT_PROMPT.md (BEGIN to END)
+      with TRACK set to the track name
+
+  Record the routine ID in BACKLOG.yml under
+  tracks.<name>.meta.scheduled_agent_routine_id
+
+schedule_file: null              # no file generated — managed in Claude Code UI
+management_url: "https://claude.ai/code/routines"
+
+prompt_template: |
+  You are the ${track_name}-track execution agent for the ${repo_name}
+  repo. Run exactly ONE tick of the procedure in
+  docs/roadmap/AGENT_PROMPT.md (BEGIN PROMPT to END PROMPT) with
+  TRACK: ${track_name}. Then exit — do NOT loop.
+
+  Begin: git fetch origin && git checkout ${prod_branch} &&
+  git pull --ff-only && cat docs/roadmap/BACKLOG.yml | head -30

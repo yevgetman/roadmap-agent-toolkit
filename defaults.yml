@@ -285,13 +285,55 @@ tracks:
 # ─────────────────────────────────────────────────────────────────
 
 agents:
+  runtime:
+    default: "claude-code"
+    type: choice
+    options: [claude-code, codex, open-code, custom]
+    prompt: "Agent runtime"
+    required: true
+    profiles_dir: profiles/agents/
+    notes: >
+      claude-code: uses Anthropic's scheduled routines (built-in
+        scheduler, no cron needed). Requires `claude` CLI installed
+        and authenticated. Default model: claude-sonnet-4-6.
+      codex: uses OpenAI Codex CLI. Requires external scheduler.
+        Default model: codex-5.4.
+      open-code: uses Open Code CLI. Requires external scheduler.
+      custom: user provides the invoke command. Requires external
+        scheduler.
+    auto_detect:
+      - command: "claude --version"
+        value: "claude-code"
+      - command: "codex --version"
+        value: "codex"
+
+  scheduler:
+    default: null                # auto-selected based on runtime + platform
+    type: choice
+    options: [claude-code-routines, launchd, crontab, github-actions, custom]
+    prompt: "Scheduler"
+    profiles_dir: profiles/schedulers/
+    auto_select:
+      - if: "agents.runtime == claude-code"
+        value: "claude-code-routines"
+        notes: "Claude Code has built-in scheduling — no external scheduler needed"
+      - if: "platform == darwin AND agents.runtime != claude-code"
+        value: "launchd"
+        notes: "macOS default — runs as a LaunchAgent"
+      - if: "platform == linux AND agents.runtime != claude-code"
+        value: "crontab"
+        notes: "Linux default"
+    notes: >
+      Only relevant when runtime is NOT claude-code. Claude Code
+      routines have their own scheduler built in.
+
   cadence_hours:
     default: 6
     type: integer
     min: 1
     max: 24
     prompt: "Agent tick cadence (hours)"
-    notes: "Each track's agent fires every N hours, offset by 1 hour from the previous"
+    notes: "Each track's agent fires every N hours, offset from the previous"
 
   offset_hours:
     default: 1
@@ -299,14 +341,18 @@ agents:
     min: 1
     max: 6
     prompt: "Offset between agents (hours)"
-    notes: "Track 1 at :00, track 2 at :01*offset, track 3 at :02*offset, etc."
+    notes: "Track 1 at :00, track 2 at :offset, track 3 at :2*offset, etc."
 
-  llm_provider:
-    default: "any"
-    type: choice
-    options: [claude, openai, any]
-    prompt: "LLM provider preference (for documentation only)"
-    notes: "This only affects text in generated docs — no code dependency is created"
+  model:
+    default: null                # set from runtime profile
+    type: string
+    prompt: "Model (leave empty for runtime default)"
+    auto_select:
+      - if: "agents.runtime == claude-code"
+        value: "claude-sonnet-4-6"
+      - if: "agents.runtime == codex"
+        value: "codex-5.4"
+    notes: "Override the runtime's default model. Only affects documentation + setup instructions."
 
 # ─────────────────────────────────────────────────────────────────
 # AD-HOC AGENT

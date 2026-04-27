@@ -1,0 +1,25 @@
+# OpenAI Codex CLI agent runtime profile
+#
+# Uses the `codex` CLI to run agent ticks. Requires a separate
+# scheduler (launchd, crontab, or GH Actions cron).
+
+name: OpenAI Codex
+slug: codex
+
+scheduler: external
+requires_cli: codex
+auth_check: "codex --version"
+auth_fail_message: |
+  Codex CLI not found.
+  Install: npm install -g @openai/codex
+  Then authenticate: codex login
+
+default_model: codex-5.4
+
+invoke_command: |
+  codex -q \
+    --model codex-5.4 \
+    --full-auto \
+    "$(cat ${repo_root}/docs/roadmap/AGENT_PROMPT.md | sed -n '/BEGIN PROMPT/,/END PROMPT/p') TRACK: ${track_name}"
+
+prompt_delivery: "inline"

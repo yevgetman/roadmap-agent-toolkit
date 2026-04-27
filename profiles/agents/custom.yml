@@ -1,0 +1,26 @@
+# Custom agent runtime profile
+#
+# User provides their own CLI command to invoke the agent.
+# Requires a separate scheduler.
+
+name: Custom
+slug: custom
+
+scheduler: external
+requires_cli: null
+auth_check: null
+
+prompts:
+  - key: invoke_command
+    prompt: "Command to invoke one agent tick (use ${track_name} and ${repo_root} as placeholders)"
+    default: null
+    required: true
+    example: "my-agent --repo ${repo_root} --prompt-file docs/roadmap/AGENT_PROMPT.md --track ${track_name}"
+
+prompt_delivery: "file"
+notes: |
+  The command should:
+    1. Run inside the repo root
+    2. Have git write access (push to staging + main)
+    3. Have gh CLI access (create issues, PRs, labels)
+    4. Execute one tick of the AGENT_PROMPT procedure then exit

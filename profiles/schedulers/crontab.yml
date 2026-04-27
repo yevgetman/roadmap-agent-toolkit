@@ -1,0 +1,18 @@
+# crontab scheduler profile
+#
+# Adds entries to the user's crontab. Works on Linux and macOS.
+
+name: crontab
+slug: crontab
+platform: any
+
+# Generated crontab entry (one per track)
+cron_entry: "${cron_expression} cd ${repo_root} && .roadmap/agents/tick-${track_name}.sh >> .roadmap/logs/${track_name}.log 2>&1"
+
+install_command: |
+  (crontab -l 2>/dev/null; echo "${cron_entry}") | crontab -
+
+uninstall_command: |
+  crontab -l 2>/dev/null | grep -v "roadmap-agent.*${track_name}" | crontab -
+
+status_command: "crontab -l | grep roadmap-agent"

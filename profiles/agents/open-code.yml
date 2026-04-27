@@ -1,0 +1,22 @@
+# Open Code agent runtime profile
+#
+# Uses the `open-code` CLI. Requires a separate scheduler.
+# https://github.com/nicepkg/open-code
+
+name: Open Code
+slug: open-code
+
+scheduler: external
+requires_cli: open-code
+auth_check: "open-code --version"
+auth_fail_message: |
+  Open Code CLI not found.
+  Install: npm install -g @nicepkg/open-code
+  Configure your LLM provider in ~/.open-code/config.json
+
+invoke_command: |
+  cd ${repo_root} && \
+  open-code --non-interactive \
+    --prompt "$(cat docs/roadmap/AGENT_PROMPT.md | sed -n '/BEGIN PROMPT/,/END PROMPT/p') TRACK: ${track_name}"
+
+prompt_delivery: "inline"

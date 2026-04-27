@@ -1,0 +1,19 @@
+# Custom scheduler profile
+#
+# User manages their own scheduling mechanism. The toolkit
+# generates the tick scripts but does not install a scheduler.
+
+name: Custom
+slug: custom
+platform: any
+
+notes: |
+  The toolkit generates tick scripts at .roadmap/agents/tick-<track>.sh
+  for each track. You are responsible for scheduling them yourself
+  using whatever mechanism you prefer (systemd timers, Kubernetes
+  CronJobs, cloud scheduler, Task Scheduler on Windows, etc.).
+
+  Recommended cadence: every ${cadence_hours} hours, offset by
+  ${offset_hours} hour(s) between tracks.
+
+status_command: null
