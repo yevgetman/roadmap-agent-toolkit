@@ -291,7 +291,7 @@ Run in CI via a simple GH Actions workflow.
 
 ## 11. Claude Code slash command skill
 
-**Status:** not started
+**Status:** COMPLETE
 
 **Goal:** Let users run `/init-roadmap` inside any Claude Code
 session to scaffold the roadmap workflow conversationally — no
@@ -353,5 +353,6 @@ Recommended sequence (each step is independently useful):
 6. **§7 — Idempotent re-runs** — COMPLETE
 7. **§8 — Test suite** — COMPLETE
 8. **§9 + §10 — Examples + docs** — COMPLETE
-9. **§11 — Claude Code slash command** — after the installer
-   is stable, port the flow to a conversational skill
+9. **§11 — Claude Code slash command** — COMPLETE
+
+**All 11 build items complete.**
