@@ -218,7 +218,7 @@ adhoc:
 
 ## 7. Idempotent re-runs
 
-**Status:** partially done (installer warns on existing files)
+**Status:** COMPLETE
 
 **What to build:**
 - [ ] When a target file already exists, show a diff preview
@@ -350,7 +350,7 @@ Recommended sequence (each step is independently useful):
 3. **§1 + §2 — Schema-driven installer** — COMPLETE
 4. **§5 — Non-interactive mode** — COMPLETE
 5. **§6 — Save config** — COMPLETE
-6. **§7 — Idempotent re-runs** — next
+6. **§7 — Idempotent re-runs** — COMPLETE
 7. **§8 — Test suite** — validates everything above
 8. **§9 + §10 — Examples + docs** — update to match
 9. **§11 — Claude Code slash command** — after the installer

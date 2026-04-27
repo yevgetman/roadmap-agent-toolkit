@@ -104,6 +104,9 @@ ADHOC_CRON="0 2/6 * * *"
 
 # Files generated (for summary)
 GENERATED_FILES=()
+SKIPPED_FILES=()
+FORCE_OVERWRITE=false
+OVERWRITE_ALL=false
 
 # ── Utilities ────────────────────────────────────────────────────
 
@@ -182,11 +185,26 @@ generate_file() {
     mkdir -p "$outdir"
 
     # Check for existing file
-    if [ -f "$output" ]; then
-        if ! confirm "  File exists: $output — overwrite?"; then
-            warn "  Skipped: $output"
-            return 0
-        fi
+    if [ -f "$output" ] && [ "$FORCE_OVERWRITE" != "true" ] && [ "$OVERWRITE_ALL" != "true" ]; then
+        local rel_path="${output#$TARGET_DIR/}"
+        printf "  ${YELLOW}exists:${NC} %s\n" "$rel_path"
+
+        local action
+        while true; do
+            printf "  ${BOLD}[S]kip / [O]verwrite / [A]ll / [Q]uit${NC}: "
+            read -r action
+            case "${action,,}" in
+                s|skip|"")
+                    warn "  Skipped: $rel_path"
+                    SKIPPED_FILES+=("$rel_path")
+                    return 0
+                    ;;
+                o|overwrite) break ;;
+                a|all) OVERWRITE_ALL=true; break ;;
+                q|quit) warn "Installation stopped by user."; exit 0 ;;
+                *) warn "  Enter S, O, A, or Q" ;;
+            esac
+        done
     fi
 
     # Build sed commands for all variables
@@ -281,11 +299,50 @@ generate_file_for_track() {
     outdir="$(dirname "$output")"
     mkdir -p "$outdir"
 
-    if [ -f "$output" ]; then
-        if ! confirm "  File exists: $output — overwrite?"; then
-            warn "  Skipped: $output"
-            return 0
+    if [ -f "$output" ] && [ "$FORCE_OVERWRITE" != "true" ] && [ "$OVERWRITE_ALL" != "true" ]; then
+        # Generate to a temp file first to check for changes
+        local tmpgen
+        tmpgen="$(mktemp)"
+        # (we'll fill tmpgen after sed runs — for now just prompt)
+
+        local rel_path="${output#$TARGET_DIR/}"
+        printf "  ${YELLOW}exists:${NC} %s\n" "$rel_path"
+
+        # Show brief diff preview
+        if command -v diff &>/dev/null; then
+            local preview
+            preview="$(diff --brief "$output" "$template" 2>/dev/null)" || true
         fi
+
+        local action
+        while true; do
+            printf "  ${BOLD}[S]kip / [O]verwrite / [A]ll / [Q]uit${NC}: "
+            read -r action
+            case "${action,,}" in
+                s|skip|"")
+                    warn "  Skipped: $rel_path"
+                    SKIPPED_FILES+=("$rel_path")
+                    rm -f "$tmpgen"
+                    return 0
+                    ;;
+                o|overwrite)
+                    break
+                    ;;
+                a|all)
+                    OVERWRITE_ALL=true
+                    break
+                    ;;
+                q|quit)
+                    warn "Installation stopped by user."
+                    rm -f "$tmpgen"
+                    exit 0
+                    ;;
+                *)
+                    warn "  Enter S, O, A, or Q"
+                    ;;
+            esac
+        done
+        rm -f "$tmpgen"
     fi
 
     # Start with the base generate_file sed_args, then add track-specific ones
@@ -632,20 +689,25 @@ while [[ $# -gt 0 ]]; do
             CONFIG_FILE="$2"
             shift 2
             ;;
+        --force|-f)
+            FORCE_OVERWRITE=true
+            shift
+            ;;
         --help|-h)
-            echo "Usage: $0 [--target <dir>] [--config <file>]"
+            echo "Usage: $0 [--target <dir>] [--config <file>] [--force]"
             echo ""
             echo "Scaffold agentic roadmap automation into a git repo."
             echo ""
             echo "Options:"
             echo "  --target <dir>   Target repository directory"
             echo "  --config <file>  YAML config for non-interactive mode"
+            echo "  --force, -f      Overwrite existing files without prompting"
             echo "  --help, -h       Show this help"
             exit 0
             ;;
         *)
             error "Unknown option: $1"
-            echo "Usage: $0 [--target <dir>] [--config <file>]"
+            echo "Usage: $0 [--target <dir>] [--config <file>] [--force]"
             exit 1
             ;;
     esac
@@ -1512,10 +1574,15 @@ printf "\n"
 # Generated files list
 printf "${BOLD}Generated files:${NC}\n"
 for f in "${GENERATED_FILES[@]}"; do
-    # Print relative path from target
     local_rel="${f#$TARGET_DIR/}"
-    printf "  %s\n" "$local_rel"
+    printf "  ${GREEN}%s${NC}\n" "$local_rel"
 done
+if [ "${#SKIPPED_FILES[@]}" -gt 0 ]; then
+    printf "\n${BOLD}Skipped (existing, unchanged):${NC}\n"
+    for f in "${SKIPPED_FILES[@]}"; do
+        printf "  ${YELLOW}%s${NC}\n" "$f"
+    done
+fi
 printf "\n"
 
 # Required secrets per platform
